@@ -169,6 +169,17 @@ m2.metric("Białko (g)", f"{total_p}", f"Cel: {active_data['protein_goal']}")
 m3.metric("Waga (kg)", f"{current_weight}", f"{round(current_weight - active_data['weight'], 1)} shift")
 m4.metric("Hydracja (L)", f"{water_drank}", f"{round(active_data['water_goal'] - water_drank, 1)} to go")
 
+# --- DAILY LOG (STAGED) ---
+with st.expander("📝 DZIENNY LOG (Wprowadzone produkty)", expanded=True):
+    if st.session_state.extra_meals:
+        df_meals = pd.DataFrame(st.session_state.extra_meals)
+        st.table(df_meals)
+        if st.button("🗑️ WYCZYŚĆ DZISIEJSZY LOG"):
+            st.session_state.extra_meals = []
+            st.rerun()
+    else:
+        st.info("Brak wpisanych produktów. Dodaj coś za pomocą mielarki lub ręcznie.")
+
 if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
     save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, "Logged", st.session_state.extra_meals, active_data["db"])
     st.sidebar.success("Zapisano!")
@@ -232,5 +243,24 @@ with col_right:
 
 st.divider()
 if os.path.isfile(active_data["db"]):
+    st.header("📈 Historia i Szczegóły")
     history_df = pd.read_csv(active_data["db"])
-    st.line_chart(history_df.set_index("Data")["Waga"])
+    
+    col_hist1, col_hist2 = st.columns([1, 2])
+    with col_hist1:
+        st.subheader("Waga")
+        st.line_chart(history_df.set_index("Data")["Waga"])
+    
+    with col_hist2:
+        st.subheader("Podgląd Dnia")
+        available_dates = history_df["Data"].unique()
+        selected_date = st.selectbox("Wybierz datę do podglądu:", available_dates[::-1])
+        day_details = history_df[history_df["Data"] == selected_date].iloc[0]
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Kcal", day_details["Kcal"])
+        c2.metric("Białko", day_details["Bialko"])
+        c3.metric("Woda", day_details["Woda"])
+        
+        st.write(f"**Produkty:** {day_details['Skladniki']}")
+        st.write(f"**Trening:** {day_details['Trening']}")
