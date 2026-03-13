@@ -23,9 +23,9 @@ MY_DATA = {
 }
 
 MY_MEALS = [
-    {"name": "Soy Protein GymBeam", "kcal": 109, "p": 26, "c": 1, "f": 0},
-    {"name": "Twarog Chudy Mlekovita", "kcal": 202, "p": 41.5, "c": 8, "f": 0.5},
-    {"name": "High Protein Milk Product", "kcal": 130, "p": 20, "c": 12, "f": 0.5},
+    {"name": "High Protein Milk Product", "kcal": 130, "p": 20.0, "c": 12.0, "f": 0.6},
+    {"name": "Soy Protein GymBeam (30g)", "kcal": 109, "p": 25.8, "c": 1.2, "f": 0.1},
+    {"name": "Twaróg Chudy Mlekovita (230g)", "kcal": 202, "p": 41.4, "c": 8.1, "f": 0.5},
 ]
 
 MY_WORKOUTS = {
@@ -39,9 +39,12 @@ MY_WORKOUTS = {
 st.sidebar.title("👤 PROFIL")
 profile_type = st.sidebar.radio("Wybierz użytkownika:", ["Mój Profil (info.md)", "Nowy Użytkownik (Custom)"])
 
+# Option to toggle default meals
+skip_defaults = st.sidebar.checkbox("Pomiń posiłki domyślne (441 kcal)", value=False)
+
 if profile_type == "Mój Profil (info.md)":
     active_data = MY_DATA
-    active_meals = MY_MEALS
+    active_meals = [] if skip_defaults else MY_MEALS
     active_workouts = MY_WORKOUTS
 else:
     if os.path.exists("user_config.json"):
@@ -89,6 +92,15 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- LOGIC ---
+def load_products():
+    try:
+        with open("data/products.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+PRODUCTS_DB = load_products()
+
 def save_progress(w, water, cals, p, c, f, workout, items, db_file):
     ingredients = ", ".join([i["name"] for i in items]) if items else "Logged"
     new_data = pd.DataFrame([{"Data": str(datetime.date.today()), "Waga": w, "Woda": water, "Kcal": cals, "Bialko": p, "Wegle": c, "Tluszcze": f, "Trening": workout, "Skladniki": ingredients}])
@@ -122,29 +134,6 @@ def evaluate_exercise(ex_name, weight, target_kcal, current_p, p_goal):
         
     return opinion
 
-def parse_suggestion(input_text):
-    text = input_text.lower()
-    products_db = {
-        "kurczak": {"name": "Pierś z kurczaka", "p": 22.0, "c": 0.0, "f": 1.5},
-        "skyr": {"name": "Skyr naturalny", "p": 12.0, "c": 4.0, "f": 0.0},
-        "tunczyk": {"name": "Tuńczyk w wodzie", "p": 24.0, "c": 0.0, "f": 1.0},
-        "ryz": {"name": "Ryż biały", "p": 7.0, "c": 77.0, "f": 1.0}
-    }
-    weight_match = re.search(r"(\d+)\s*g", text)
-    weight = float(weight_match.group(1)) if weight_match else 100.0
-    detected_meal = None
-    for key, val in products_db.items():
-        if key in text: detected_meal = val.copy()
-    if detected_meal:
-        multiplier = weight / 100.0
-        detected_meal["name"] = f"{detected_meal['name']} ({int(weight)}g)"
-        detected_meal["p"] = round(detected_meal["p"] * multiplier, 1)
-        detected_meal["c"] = round(detected_meal["c"] * multiplier, 1)
-        detected_meal["f"] = round(detected_meal["f"] * multiplier, 1)
-        detected_meal["kcal"] = round((detected_meal["p"] * 4) + (detected_meal["c"] * 4) + (detected_meal["f"] * 9), 1)
-        return detected_meal
-    return None
-
 # --- UI LOGIC ---
 st.sidebar.divider()
 current_weight = st.sidebar.number_input("Pomiar wagi (kg)", value=float(active_data["weight"]), step=0.1)
@@ -164,8 +153,8 @@ st.title("🚀 Health-ML Optimizer")
 
 # --- METRICS ---
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Energia (Kcal)", f"{total_kcal}", f"{active_data['target_kcal'] - total_kcal} left")
-m2.metric("Białko (g)", f"{total_p}", f"Cel: {active_data['protein_goal']}")
+m1.metric("Energia (Kcal)", f"{total_kcal:.0f}", f"{active_data['target_kcal'] - total_kcal:.0f} left")
+m2.metric("Białko (g)", f"{total_p:.1f}", f"Cel: {active_data['protein_goal']}")
 m3.metric("Waga (kg)", f"{current_weight}", f"{round(current_weight - active_data['weight'], 1)} shift")
 m4.metric("Hydracja (L)", f"{water_drank}", f"{round(active_data['water_goal'] - water_drank, 1)} to go")
 
@@ -180,8 +169,12 @@ with st.expander("📝 DZIENNY LOG (Wprowadzone produkty)", expanded=True):
     else:
         st.info("Brak wpisanych produktów. Dodaj coś za pomocą mielarki lub ręcznie.")
 
+# --- WORKOUT STATE ---
+if "workout_status" not in st.session_state: st.session_state.workout_status = []
+
 if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
-    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, "Logged", st.session_state.extra_meals, active_data["db"])
+    workout_log = st.session_state.workout_status if st.session_state.workout_status else "Rest Day"
+    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, workout_log, st.session_state.extra_meals, active_data["db"])
     st.sidebar.success("Zapisano!")
     st.session_state.extra_meals = []
 
@@ -190,20 +183,31 @@ col_left, col_mid, col_right = st.columns([1, 1, 1])
 
 with col_left:
     st.header("🍱 Mielarka Sugestii")
-    query = st.text_input("Zapytaj o produkt (np. 300g kurczak)")
-    if st.button("ANALIZUJ PRODUKT"):
-        meal = parse_suggestion(query)
-        if meal:
-            st.session_state.temp_suggestion = meal
-            st.info(f"🔍 {meal['name']} | {meal['kcal']} kcal")
-        else: st.warning("Nie rozpoznano.")
-
-    if st.session_state.temp_suggestion:
-        if st.button("✅ DODAJ POSIŁEK"):
-            st.session_state.extra_meals.append(st.session_state.temp_suggestion)
-            st.session_state.temp_suggestion = None
+    st.caption("Baza Wiedzy (Machine Learning Dataset)")
+    
+    if PRODUCTS_DB:
+        selected_product = st.selectbox("Wybierz produkt:", list(PRODUCTS_DB.keys()))
+        input_grams = st.number_input("Ile gram?", value=100, step=10, min_value=1)
+        
+        # Calculate
+        p_info = PRODUCTS_DB[selected_product]
+        multiplier = input_grams / 100.0
+        
+        calc_kcal = round(p_info["kcal"] * multiplier, 1)
+        calc_p = round(p_info["p"] * multiplier, 1)
+        calc_c = round(p_info["c"] * multiplier, 1)
+        calc_f = round(p_info["f"] * multiplier, 1)
+        
+        st.info(f"📊 {selected_product} ({input_grams}g)\n\n**{calc_kcal} kcal** | B: {calc_p} | W: {calc_c} | T: {calc_f}")
+        
+        if st.button("✅ DODAJ (AUTO-CALC)"):
+            st.session_state.extra_meals.append({
+                "name": f"{selected_product} ({input_grams}g)",
+                "kcal": calc_kcal, "p": calc_p, "c": calc_c, "f": calc_f
+            })
             st.rerun()
-
+    else:
+        st.error("Brak pliku data/products.json! Stwórz go, aby korzystać z bazy.")
 with col_mid:
     st.header("🥗 Dodaj Ręcznie")
     m_name = st.text_input("Nazwa produktu", key="m_name")
@@ -224,7 +228,19 @@ with col_right:
     st.header("🏋️ Plan Treningowy")
     selected_day = st.selectbox("Wybierz trening:", list(active_workouts.keys()))
     if selected_day == "Dzień C (Nogi)" and profile_type == "Mój Profil (info.md)": st.error("🚫 ZAKAZ BIEGANIA")
-    for ex in active_workouts[selected_day]: st.checkbox(ex)
+    
+    # Capture state
+    checked_exercises = []
+    for ex in active_workouts[selected_day]:
+        # Unique key for every exercise to avoid conflicts
+        if st.checkbox(ex, key=f"chk_{ex}"):
+            checked_exercises.append(ex)
+            
+    # Update session state for the Save button (which is in Sidebar)
+    if checked_exercises:
+        st.session_state.workout_status = f"{selected_day}: " + ", ".join(checked_exercises)
+    else:
+        st.session_state.workout_status = selected_day # Default to just day name if no specific exercise checked yet
     
     # --- EXERCISE EVALUATOR (ONLY FOR CUSTOM) ---
     if profile_type == "Nowy Użytkownik (Custom)":
