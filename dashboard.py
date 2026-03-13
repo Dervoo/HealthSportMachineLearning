@@ -89,7 +89,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- LOGIC ---
-def save_progress(w, water, cals, p, c, f, workout, ingredients, db_file):
+def save_progress(w, water, cals, p, c, f, workout, items, db_file):
+    ingredients = ", ".join([i["name"] for i in items]) if items else "Logged"
     new_data = pd.DataFrame([{"Data": str(datetime.date.today()), "Waga": w, "Woda": water, "Kcal": cals, "Bialko": p, "Wegle": c, "Tluszcze": f, "Trening": workout, "Skladniki": ingredients}])
     if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
     else: new_data.to_csv(db_file, mode='a', header=False, index=False)
@@ -152,7 +153,11 @@ water_drank = st.sidebar.slider("Woda (L)", 0.0, 5.0, 1.5)
 # --- AGGREGATION ---
 base_p = sum(m["p"] for m in active_meals)
 extra_p = sum(m["p"] for m in st.session_state.extra_meals)
+extra_c = sum(m["c"] for m in st.session_state.extra_meals)
+extra_f = sum(m["f"] for m in st.session_state.extra_meals)
 total_p = base_p + extra_p
+total_c = sum(m["c"] for m in active_meals) + extra_c
+total_f = sum(m["f"] for m in active_meals) + extra_f
 total_kcal = sum(m["kcal"] for m in active_meals) + sum(m["kcal"] for m in st.session_state.extra_meals)
 
 st.title("🚀 Health-ML Optimizer")
@@ -165,12 +170,12 @@ m3.metric("Waga (kg)", f"{current_weight}", f"{round(current_weight - active_dat
 m4.metric("Hydracja (L)", f"{water_drank}", f"{round(active_data['water_goal'] - water_drank, 1)} to go")
 
 if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
-    save_progress(current_weight, water_drank, total_kcal, total_p, 0, 0, "Logged", "Items", active_data["db"])
+    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, "Logged", st.session_state.extra_meals, active_data["db"])
     st.sidebar.success("Zapisano!")
     st.session_state.extra_meals = []
 
 st.divider()
-col_left, col_right = st.columns([1, 1])
+col_left, col_mid, col_right = st.columns([1, 1, 1])
 
 with col_left:
     st.header("🍱 Mielarka Sugestii")
@@ -187,6 +192,22 @@ with col_left:
             st.session_state.extra_meals.append(st.session_state.temp_suggestion)
             st.session_state.temp_suggestion = None
             st.rerun()
+
+with col_mid:
+    st.header("🥗 Dodaj Ręcznie")
+    m_name = st.text_input("Nazwa produktu", key="m_name")
+    m_kcal = st.number_input("Kcal", min_value=0, step=1, key="m_kcal")
+    m_p = st.number_input("Białko (g)", min_value=0.0, step=0.1, key="m_p")
+    m_c = st.number_input("Węglowodany (g)", min_value=0.0, step=0.1, key="m_c")
+    m_f = st.number_input("Tłuszcze (g)", min_value=0.0, step=0.1, key="m_f")
+    if st.button("➕ DODAJ DO DNIA"):
+        if m_name:
+            st.session_state.extra_meals.append({
+                "name": m_name, "kcal": m_kcal, "p": m_p, "c": m_c, "f": m_f
+            })
+            st.success(f"Dodano: {m_name}")
+            st.rerun()
+        else: st.error("Podaj nazwę produktu!")
 
 with col_right:
     st.header("🏋️ Plan Treningowy")
