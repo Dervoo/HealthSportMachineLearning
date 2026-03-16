@@ -312,12 +312,22 @@ with col_left:
 
 with col_mid:
     st.header("🥗 Dodaj Ręcznie")
-    m_name = st.text_input("Nazwa produktu", key="m_name")
-    m_kcal = st.number_input("Kcal", min_value=0, step=1)
-    m_p = st.number_input("Białko (g)", min_value=0.0, step=0.1)
-    if st.button("➕ DODAJ RĘCZNIE"):
-        if m_name:
-            st.session_state.extra_meals.append({"name": m_name, "kcal": m_kcal, "p": m_p, "c": 0, "f": 0})
+    m_name = st.text_input("Nazwa produktu/posiłku", key="m_name", placeholder="Np. Obiad u babci")
+    m_kcal = st.number_input("Kcal (opcjonalnie)", min_value=0, step=1)
+    c1, c2, c3 = st.columns(3)
+    m_p = c1.number_input("Białko (g)", min_value=0.0, step=0.1)
+    m_c = c2.number_input("Węgle (g)", min_value=0.0, step=0.1)
+    m_f = c3.number_input("Tłuszcz (g)", min_value=0.0, step=0.1)
+    
+    # Auto-wyliczanie kcal jeśli nie podano
+    if m_kcal == 0 and (m_p > 0 or m_c > 0 or m_f > 0):
+        m_kcal = int(m_p * 4 + m_c * 4 + m_f * 9)
+        st.caption(f"Wyliczone kcal: {m_kcal}")
+
+    if st.button("➕ DODAJ POSIŁEK"):
+        if m_name or m_kcal > 0:
+            name = m_name if m_name else "Ręczny wpis"
+            st.session_state.extra_meals.append({"name": name, "kcal": m_kcal, "p": m_p, "c": m_c, "f": m_f})
             st.rerun()
 
 with col_right:
@@ -328,14 +338,15 @@ with col_right:
     for ex in active_workouts[selected_day]:
         checked = st.checkbox(ex, key=f"chk_{ex}")
         if checked:
-            c1, c2, c3 = st.columns([1, 1, 1])
-            w = c1.number_input("kg", min_value=0.0, step=0.5, key=f"w_{ex}", value=0.0)
-            r = c2.number_input("reps", min_value=0, step=1, key=f"r_{ex}", value=0)
-            rpe = c3.number_input("RPE", min_value=1, max_value=10, step=1, key=f"rpe_{ex}", value=8)
-            workout_summary.append(f"{ex}({w}kg x {r} @RPE{rpe})")
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            s = c1.number_input("sets", min_value=1, step=1, key=f"s_{ex}", value=3)
+            w = c2.number_input("kg", min_value=0.0, step=0.5, key=f"w_{ex}", value=0.0)
+            r = c3.number_input("reps", min_value=0, step=1, key=f"r_{ex}", value=0)
+            rpe = c4.number_input("RPE", min_value=1, max_value=10, step=1, key=f"rpe_{ex}", value=8)
+            workout_summary.append(f"{ex}({s}x{w}kg x {r} @RPE{rpe})")
             # Zachowujemy dane do zapisu strukturalnego
             if "current_workout" not in st.session_state: st.session_state.current_workout = []
-            st.session_state.current_workout.append({"ex": ex, "w": w, "r": r, "rpe": rpe})
+            st.session_state.current_workout.append({"ex": ex, "sets": s, "w": w, "r": r, "rpe": rpe})
 
     st.session_state.workout_status = ", ".join(workout_summary) if workout_summary else "Rest Day"
 
