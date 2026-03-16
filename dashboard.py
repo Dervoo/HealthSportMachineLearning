@@ -4,9 +4,14 @@ import datetime
 import os
 import json
 import requests
+from ml_engine import MLEngine
 
 # --- CONFIG & STYLES ---
 st.set_page_config(page_title="Health-ML Dashboard", layout="wide", initial_sidebar_state="expanded")
+
+# --- ML ENGINE ---
+if "ml" not in st.session_state:
+    st.session_state.ml = MLEngine()
 
 # --- EDAMAM CONFIG (Keys stored safely in .streamlit/secrets.toml) ---
 try:
@@ -135,9 +140,21 @@ def search_edamam_products(query):
 
 PRODUCTS_DB = load_products()
 
-def save_progress(w, water, cals, p, c, f, workout, items, db_file):
+def save_progress(w, water, cals, p, c, f, workout, items, db_file, rpe=8, sleep=4):
     ingredients = ", ".join([i["name"] for i in items]) if items else "Logged"
-    new_data = pd.DataFrame([{"Data": str(datetime.date.today()), "Waga": w, "Woda": water, "Kcal": cals, "Bialko": p, "Wegle": c, "Tluszcze": f, "Trening": workout, "Skladniki": ingredients}])
+    new_data = pd.DataFrame([{
+        "Data": str(datetime.date.today()), 
+        "Waga": w, 
+        "Woda": water, 
+        "Kcal": cals, 
+        "Bialko": p, 
+        "Wegle": c, 
+        "Tluszcze": f, 
+        "Trening": workout, 
+        "Skladniki": ingredients,
+        "RPE": rpe,
+        "Sen_Jakosc": sleep
+    }])
     if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
     else: new_data.to_csv(db_file, mode='a', header=False, index=False)
 # --- UI LOGIC ---
@@ -171,11 +188,41 @@ with st.expander("📝 DZIENNY LOG", expanded=True):
             st.rerun()
     else: st.info("Dodaj coś poniżej.")
 
+st.sidebar.divider()
+st.sidebar.subheader("🧠 ML INPUTS")
+daily_rpe = st.sidebar.select_slider("RPE (Trudność)", options=list(range(1, 11)), value=7)
+daily_sleep = st.sidebar.select_slider("Sen (Jakość)", options=list(range(1, 6)), value=4)
+
 if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
     workout_log = st.session_state.get("workout_status", "Rest Day")
-    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, workout_log, st.session_state.extra_meals, active_data["db"])
+    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, workout_log, st.session_state.extra_meals, active_data["db"], daily_rpe, daily_sleep)
     st.sidebar.success("Zapisano!")
     st.session_state.extra_meals = []
+
+st.divider()
+st.header("🧠 AI Insights & Recommendations")
+ai_col1, ai_col2 = st.columns(2)
+
+with ai_col1:
+    st.subheader("📉 Weight Trend (ML)")
+    trend = st.session_state.ml.predict_weight_trend()
+    if trend:
+        st.metric("Prognoza (7 dni)", f"{trend['target_weight']} kg", f"{trend['weekly_change']} kg/week")
+    else:
+        st.info("Zbierz min. 3 dni pomiarów, aby zobaczyć trend.")
+
+with ai_col2:
+    st.subheader("🍗 Diet Optimizer")
+    diet_sugg = st.session_state.ml.suggest_diet(
+        target_kcal=active_data['target_kcal'] - total_kcal,
+        target_protein=active_data['protein_goal'] - total_p
+    )
+    if isinstance(diet_sugg, dict) and diet_sugg['plan']:
+        st.write("Aby dobić makro, zjedz dziś:")
+        for item in diet_sugg['plan']:
+            st.success(f"✔️ {item['product']} - {item['amount']}g")
+    else:
+        st.write("Makroskładniki są już blisko celu lub brak pasujących produktów.")
 
 st.divider()
 col_left, col_mid, col_right = st.columns([1, 1, 1])
