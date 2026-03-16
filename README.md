@@ -28,5 +28,5 @@ Agent operuje zgodnie z zasadami zawartymi w `info.md`. Główne zasady to:
 
 ## 🚀 Uruchomienie
 ```bash
-streamlit run dashboard.py
+py -m streamlit run dashboard.py
 ```
