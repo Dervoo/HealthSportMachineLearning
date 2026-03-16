@@ -77,6 +77,29 @@ class MLEngine:
         else:
             return f"Stabilizacja: Skup się na tempie w {workout_name}."
 
+    def analyze_sleep_impact(self):
+        """Analizuje korelację między jakością snu a trudnością treningu (RPE)."""
+        if len(self.df) < 5:
+            return "Zbyt mało danych (wymagane 5 dni z treningiem)."
+        
+        # Filtrujemy dni, gdzie był trening i jest ocena snu
+        data = self.df.dropna(subset=['RPE', 'Sen_Jakosc'])
+        if len(data) < 3:
+            return "Brak wystarczających danych treningowych."
+
+        # Korelacja ujemna jest dobra (Więcej Snu = Mniejsze RPE/Lżej)
+        correlation = data['Sen_Jakosc'].corr(data['RPE'])
+        
+        if np.isnan(correlation):
+            return "Brak korelacji (stałe wartości)."
+            
+        if correlation < -0.5:
+            return f"Silna zależność ({correlation:.2f}): Lepszy sen wyraźnie ułatwia treningi!"
+        elif correlation > 0.5:
+            return f"Anomalia ({correlation:.2f}): Mimo dobrego snu, treningi są ciężkie (sprawdź objętość)."
+        else:
+            return f"Brak wyraźnego wpływu snu na RPE ({correlation:.2f})."
+
 # Test silnika (opcjonalny)
 if __name__ == "__main__":
     engine = MLEngine()

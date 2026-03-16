@@ -201,7 +201,7 @@ if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
 
 st.divider()
 st.header("🧠 AI Insights & Recommendations")
-ai_col1, ai_col2 = st.columns(2)
+ai_col1, ai_col2, ai_col3 = st.columns(3)
 
 with ai_col1:
     st.subheader("📉 Weight Trend (ML)")
@@ -223,6 +223,12 @@ with ai_col2:
             st.success(f"✔️ {item['product']} - {item['amount']}g")
     else:
         st.write("Makroskładniki są już blisko celu lub brak pasujących produktów.")
+
+with ai_col3:
+    st.subheader("💤 Sleep Analysis")
+    sleep_impact = st.session_state.ml.analyze_sleep_impact()
+    st.info(f"{sleep_impact}")
+    st.caption("Korelacja Pearsona: RPE vs Sen. Im lepszy sen, tym powinno być lżej (ujemna korelacja).")
 
 st.divider()
 col_left, col_mid, col_right = st.columns([1, 1, 1])
