@@ -25,6 +25,7 @@ except:
 if "extra_meals" not in st.session_state: st.session_state.extra_meals = []
 if "api_results" not in st.session_state: st.session_state.api_results = []
 if "last_query" not in st.session_state: st.session_state.last_query = ""
+if "current_workout" not in st.session_state: st.session_state.current_workout = []
 if "api_session" not in st.session_state:
     st.session_state.api_session = requests.Session()
 
@@ -140,23 +141,24 @@ def search_edamam_products(query):
 
 PRODUCTS_DB = load_products()
 
-def save_progress(w, water, cals, p, c, f, workout, items, db_file, rpe=8, sleep=4):
+def save_progress(w, water, cals, p, c, f, workout, items, db_file, rpe=8, sleep=4, workout_details=None):
+    today = str(datetime.date.today())
+    # 1. Główny log progress_me.csv
     ingredients = ", ".join([i["name"] for i in items]) if items else "Logged"
     new_data = pd.DataFrame([{
-        "Data": str(datetime.date.today()), 
-        "Waga": w, 
-        "Woda": water, 
-        "Kcal": cals, 
-        "Bialko": p, 
-        "Wegle": c, 
-        "Tluszcze": f, 
-        "Trening": workout, 
-        "Skladniki": ingredients,
-        "RPE": rpe,
-        "Sen_Jakosc": sleep
+        "Data": today, "Waga": w, "Woda": water, "Kcal": cals, "Bialko": p, "Wegle": c, "Tluszcze": f, 
+        "Trening": workout, "Skladniki": ingredients, "RPE": rpe, "Sen_Jakosc": sleep
     }])
     if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
     else: new_data.to_csv(db_file, mode='a', header=False, index=False)
+
+    # 2. Szczegółowy log workout_history.csv
+    if workout_details:
+        history_file = "workout_history.csv"
+        df_workout = pd.DataFrame(workout_details)
+        df_workout['Data'] = today
+        if not os.path.isfile(history_file): df_workout.to_csv(history_file, index=False)
+        else: df_workout.to_csv(history_file, mode='a', header=False, index=False)
 # --- UI LOGIC ---
 st.sidebar.divider()
 current_weight = st.sidebar.number_input("Pomiar wagi (kg)", value=float(active_data["weight"]), step=0.1)
@@ -195,9 +197,13 @@ daily_sleep = st.sidebar.select_slider("Sen (Jakość)", options=list(range(1, 6
 
 if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
     workout_log = st.session_state.get("workout_status", "Rest Day")
-    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, workout_log, st.session_state.extra_meals, active_data["db"], daily_rpe, daily_sleep)
+    details = st.session_state.current_workout if workout_log != "Rest Day" else None
+    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, workout_log, st.session_state.extra_meals, active_data["db"], daily_rpe, daily_sleep, details)
     st.sidebar.success("Zapisano!")
     st.session_state.extra_meals = []
+    st.session_state.current_workout = []
+    st.rerun()
+
 
 st.divider()
 st.header("🧠 AI Insights & Recommendations")
@@ -317,8 +323,21 @@ with col_mid:
 with col_right:
     st.header("🏋️ Trening")
     selected_day = st.selectbox("Dzień:", list(active_workouts.keys()))
+    workout_summary = []
+    
     for ex in active_workouts[selected_day]:
-        st.checkbox(ex, key=f"chk_{ex}")
+        checked = st.checkbox(ex, key=f"chk_{ex}")
+        if checked:
+            c1, c2, c3 = st.columns([1, 1, 1])
+            w = c1.number_input("kg", min_value=0.0, step=0.5, key=f"w_{ex}", value=0.0)
+            r = c2.number_input("reps", min_value=0, step=1, key=f"r_{ex}", value=0)
+            rpe = c3.number_input("RPE", min_value=1, max_value=10, step=1, key=f"rpe_{ex}", value=8)
+            workout_summary.append(f"{ex}({w}kg x {r} @RPE{rpe})")
+            # Zachowujemy dane do zapisu strukturalnego
+            if "current_workout" not in st.session_state: st.session_state.current_workout = []
+            st.session_state.current_workout.append({"ex": ex, "w": w, "r": r, "rpe": rpe})
+
+    st.session_state.workout_status = ", ".join(workout_summary) if workout_summary else "Rest Day"
 
 st.divider()
 if os.path.isfile(active_data["db"]):
