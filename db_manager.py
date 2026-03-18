@@ -45,9 +45,17 @@ class DBManager:
                     training_log TEXT,
                     rpe INTEGER,
                     sleep_quality INTEGER,
+                    water_raw REAL,
+                    herbs_raw REAL,
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             """)
+            # Migracja dla istniejących baz danych
+            try:
+                cursor.execute("ALTER TABLE progress ADD COLUMN water_raw REAL")
+                cursor.execute("ALTER TABLE progress ADD COLUMN herbs_raw REAL")
+            except:
+                pass
             conn.commit()
 
     def add_user(self, name, age, height, gender, activity, goal, kcal, protein, water):
@@ -72,13 +80,26 @@ class DBManager:
         with self._get_connection() as conn:
             return pd.read_sql_query("SELECT * FROM users", conn)
 
-    def add_progress(self, user_id, date, weight, water, kcal, protein, carbs, fats, training, rpe, sleep):
+    def add_or_update_progress(self, user_id, date, weight, water, kcal, protein, carbs, fats, training, rpe, sleep, water_raw=0.0, herbs_raw=0.0):
+        """Dodaje nowy wpis lub aktualizuje istniejący dla danej daty (UPSERT)."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO progress (user_id, date, weight, water, kcal, protein, carbs, fats, training_log, rpe, sleep_quality)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, date, weight, water, kcal, protein, carbs, fats, training, rpe, sleep))
+            # Sprawdź czy wpis już istnieje
+            cursor.execute("SELECT id FROM progress WHERE user_id = ? AND date = ?", (user_id, date))
+            exists = cursor.fetchone()
+            
+            if exists:
+                cursor.execute("""
+                    UPDATE progress SET 
+                        weight = ?, water = ?, kcal = ?, protein = ?, carbs = ?, fats = ?, 
+                        training_log = ?, rpe = ?, sleep_quality = ?, water_raw = ?, herbs_raw = ?
+                    WHERE id = ?
+                """, (weight, water, kcal, protein, carbs, fats, training, rpe, sleep, water_raw, herbs_raw, exists[0]))
+            else:
+                cursor.execute("""
+                    INSERT INTO progress (user_id, date, weight, water, kcal, protein, carbs, fats, training_log, rpe, sleep_quality, water_raw, herbs_raw)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, date, weight, water, kcal, protein, carbs, fats, training, rpe, sleep, water_raw, herbs_raw))
             conn.commit()
 
     def get_user_progress(self, user_id):

@@ -41,6 +41,10 @@ if "api_results" not in st.session_state: st.session_state.api_results = []
 if "target_kcal" not in st.session_state: st.session_state.target_kcal = st.session_state.ai_cfg["target_kcal"]
 if "protein_goal" not in st.session_state: st.session_state.protein_goal = st.session_state.ai_cfg["protein_goal"]
 if "water_goal" not in st.session_state: st.session_state.water_goal = st.session_state.ai_cfg.get("water_goal", 2.5)
+if "daily_rpe" not in st.session_state: st.session_state.daily_rpe = 7
+if "daily_sleep" not in st.session_state: st.session_state.daily_sleep = 4
+if "daily_water" not in st.session_state: st.session_state.daily_water = 1.5
+if "daily_herbs" not in st.session_state: st.session_state.daily_herbs = 0.0
 
 # --- CONSTANTS ---
 MY_MEALS = [{"name": "High Protein Milk", "kcal": 130, "p": 20.0, "c": 12.0, "f": 0.6}, {"name": "Soy Protein (30g)", "kcal": 109, "p": 25.8, "c": 1.2, "f": 0.1}, {"name": "Twaróg Chudy (230g)", "kcal": 202, "p": 41.4, "c": 8.1, "f": 0.5}]
@@ -112,12 +116,12 @@ else:
 
 st.sidebar.divider()
 log_date = st.sidebar.date_input("📅 Data wpisu:", datetime.date.today())
-daily_rpe = st.sidebar.select_slider("🧠 RPE (Trudność)", options=list(range(1, 11)), value=7)
-daily_sleep = st.sidebar.select_slider("😴 Sen (Jakość)", options=list(range(1, 6)), value=4)
+daily_rpe = st.sidebar.select_slider("🧠 RPE (Trudność)", options=list(range(1, 11)), value=st.session_state.daily_rpe)
+daily_sleep = st.sidebar.select_slider("😴 Sen (Jakość)", options=list(range(1, 6)), value=st.session_state.daily_sleep)
 
 st.sidebar.divider()
-water_val = st.sidebar.slider("💧 Woda (L)", 0.0, 5.0, 1.5, step=0.1)
-herbs_val = st.sidebar.number_input("🌿 Ziółka (L)", 0.0, 2.0, 0.0, step=0.1)
+water_val = st.sidebar.slider("💧 Woda (L)", 0.0, 5.0, value=st.session_state.daily_water, step=0.1)
+herbs_val = st.sidebar.number_input("🌿 Ziółka (L)", 0.0, 2.0, value=st.session_state.daily_herbs, step=0.1)
 total_hydration = round(water_val + (herbs_val * 0.9) + st.session_state.meal_water, 2)
 
 with st.sidebar.expander("🤖 AI SMART GOAL"):
@@ -166,14 +170,48 @@ with c_log2:
             if st.button("🗑️ WYCZYŚĆ TRENING"): st.session_state.workout_session = []; st.rerun()
 
 st.sidebar.divider()
+if st.sidebar.button("🔄 WCZYTAJ ZAPISANE DANE"):
+    if profile_type == "Mój Profil":
+        if os.path.exists(db_file):
+            df_hist = pd.read_csv(db_file)
+            day_data = df_hist[df_hist['Data'] == str(log_date)]
+            if not day_data.empty:
+                row = day_data.iloc[0]
+                st.session_state.workout_session = [x.strip() for x in str(row['Trening']).split(",")] if row['Trening'] != "Rest Day" else []
+                st.session_state.extra_meals = [{"name": "Zapisane: " + row['Skladniki'], "kcal": row['Kcal'], "p": row['Bialko'], "c": 0, "f": 0}]
+                st.session_state.daily_rpe = int(row['RPE'])
+                st.session_state.daily_sleep = int(row['Sen_Jakosc'])
+                st.session_state.daily_water = float(row.get('Water_Raw', 1.5))
+                st.session_state.daily_herbs = float(row.get('Herbs_Raw', 0.0))
+                st.success("Wczytano dane z CSV!")
+    else:
+        progress = st.session_state.db.get_user_progress(current_user_id)
+        day_data = progress[progress['date'] == str(log_date)]
+        if not day_data.empty:
+            row = day_data.iloc[0]
+            st.session_state.workout_session = [x.strip() for x in str(row['training_log']).split(",")] if row['training_log'] != "Rest Day" else []
+            st.session_state.extra_meals = [{"name": "Zapisane dane", "kcal": row['kcal'], "p": row['protein'], "c": row['carbs'], "f": row['fats']}]
+            st.session_state.daily_rpe = int(row['rpe'])
+            st.session_state.daily_sleep = int(row['sleep_quality'])
+            st.session_state.daily_water = float(row.get('water_raw', 1.5))
+            st.session_state.daily_herbs = float(row.get('herbs_raw', 0.0))
+            st.success("Wczytano dane z Bazy SQL!")
+    st.rerun()
+
 if st.sidebar.button("💾 ZAPISZ CAŁY DZIEŃ"):
     workout_str = ", ".join(st.session_state.workout_session) if st.session_state.workout_session else "Rest Day"
     if profile_type == "Mój Profil":
-        new_data = pd.DataFrame([{"Data": str(log_date), "Waga": st.session_state.ai_cfg["weight"], "Woda": total_hydration, "Kcal": total_kcal, "Bialko": total_p, "Wegle": 0, "Tluszcze": 0, "Trening": workout_str, "Skladniki": "Logged", "RPE": daily_rpe, "Sen_Jakosc": daily_sleep, "Cel_Kcal": st.session_state.target_kcal, "Cel_Bialko": st.session_state.protein_goal}])
-        if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
-        else: new_data.to_csv(db_file, mode='a', header=False, index=False)
+        new_row = {"Data": str(log_date), "Waga": st.session_state.ai_cfg["weight"], "Woda": total_hydration, "Kcal": total_kcal, "Bialko": total_p, "Wegle": 0, "Tluszcze": 0, "Trening": workout_str, "Skladniki": "Logged", "RPE": daily_rpe, "Sen_Jakosc": daily_sleep, "Cel_Kcal": st.session_state.target_kcal, "Cel_Bialko": st.session_state.protein_goal, "Water_Raw": water_val, "Herbs_Raw": herbs_val}
+        if os.path.exists(db_file):
+            df_hist = pd.read_csv(db_file)
+            # Usuń stary wpis dla tej daty jeśli istnieje
+            df_hist = df_hist[df_hist['Data'] != str(log_date)]
+            df_hist = pd.concat([df_hist, pd.DataFrame([new_row])], ignore_index=True)
+            df_hist.to_csv(db_file, index=False)
+        else:
+            pd.DataFrame([new_row]).to_csv(db_file, index=False)
     else:
-        st.session_state.db.add_progress(current_user_id, str(log_date), st.session_state.ai_cfg["weight"], total_hydration, total_kcal, total_p, 0, 0, workout_str, daily_rpe, daily_sleep)
+        st.session_state.db.add_or_update_progress(current_user_id, str(log_date), st.session_state.ai_cfg["weight"], total_hydration, total_kcal, total_p, 0, 0, workout_str, daily_rpe, daily_sleep, water_raw=water_val, herbs_raw=herbs_val)
     
     st.session_state.ml.reload_data()
     st.session_state.extra_meals = []; st.session_state.workout_session = []; st.session_state.meal_water = 0.0; st.rerun()
