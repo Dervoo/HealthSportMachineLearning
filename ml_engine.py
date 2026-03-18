@@ -7,6 +7,7 @@ class MLEngine:
     def __init__(self, csv_path="progress_me.csv", products_path="data/products.json"):
         self.csv_path = csv_path
         self.products_path = products_path
+        self.df = pd.DataFrame() # Initialize empty
         self.reload_data()
         try:
             with open(products_path, 'r', encoding='utf-8') as f:
@@ -14,13 +15,38 @@ class MLEngine:
         except:
             self.products = {}
 
-    def reload_data(self):
-        """Wczytuje najnowsze dane z pliku CSV."""
-        try:
-            self.df = pd.read_csv(self.csv_path)
-            self.df['Data'] = pd.to_datetime(self.df['Data'])
-        except:
+    def set_data(self, df):
+        """Ustawia dane bezpośrednio (np. z bazy SQL) i mapuje nazwy kolumn."""
+        if df.empty:
             self.df = pd.DataFrame()
+            return
+            
+        # Mapowanie nazw kolumn z bazy na format oczekiwany przez MLEngine/Dashboard
+        mapping = {
+            'date': 'Data',
+            'weight': 'Waga',
+            'water': 'Woda',
+            'kcal': 'Kcal',
+            'protein': 'Bialko',
+            'carbs': 'Wegle',
+            'fats': 'Tluszcze',
+            'training_log': 'Trening',
+            'rpe': 'RPE',
+            'sleep_quality': 'Sen_Jakosc'
+        }
+        self.df = df.rename(columns=mapping)
+        if 'Data' in self.df.columns:
+            self.df['Data'] = pd.to_datetime(self.df['Data'])
+
+    def reload_data(self):
+        """Wczytuje najnowsze dane z pliku CSV (zachowanie wstecznej kompatybilności)."""
+        try:
+            if os.path.exists(self.csv_path):
+                self.df = pd.read_csv(self.csv_path)
+                if not self.df.empty and 'Data' in self.df.columns:
+                    self.df['Data'] = pd.to_datetime(self.df['Data'])
+        except:
+            pass
 
     def calculate_water_requirement(self, weight, activity_level):
         """Oblicza zapotrzebowanie na wodę: 33ml na kg masy ciała + bonus za aktywność."""

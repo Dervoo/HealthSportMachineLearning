@@ -5,9 +5,17 @@ import os
 import json
 import requests
 from ml_engine import MLEngine
+from db_manager import DBManager
+from analytics_engine import AnalyticsEngine
 
 # --- CONFIG & STYLES ---
 st.set_page_config(page_title="Health-ML Dashboard", layout="wide", initial_sidebar_state="expanded")
+
+# --- DB & ANALYTICS ---
+if "db" not in st.session_state:
+    st.session_state.db = DBManager()
+if "ae" not in st.session_state:
+    st.session_state.ae = AnalyticsEngine()
 
 # --- ML ENGINE ---
 if "ml" not in st.session_state or not hasattr(st.session_state.ml, "calculate_water_requirement"):
@@ -36,12 +44,36 @@ if "water_goal" not in st.session_state: st.session_state.water_goal = st.sessio
 
 # --- CONSTANTS ---
 MY_MEALS = [{"name": "High Protein Milk", "kcal": 130, "p": 20.0, "c": 12.0, "f": 0.6}, {"name": "Soy Protein (30g)", "kcal": 109, "p": 25.8, "c": 1.2, "f": 0.1}, {"name": "Twaróg Chudy (230g)", "kcal": 202, "p": 41.4, "c": 8.1, "f": 0.5}]
-MY_WORKOUTS = {"Dzień A (Push)": ["Pompki z plecakiem 15kg", "Floor Press 24kg", "Barki OHP 24kg", "Pompki nogi wyżej", "Pompki z wąskimi rękoma", "Wyprosty za głowę"], "Dzień B (Pull)": ["Podciąganie", "Wiosłowanie 24kg+15kg", "Wiosłowanie hantlami 7kg", "Biceps hantle", "Plank z plecakiem 15kg"], "Dzień C (Nogi)": ["Bułgarskie przysiady", "RDL 24kg+15kg", "Hip Thrust 24kg", "Wykroki 7kg", "Wznosy nóg"], "Dzień Wolny / Cardio": ["Bieganie 35-40 min", "Rozciąganie Statyczne"]}
+MY_WORKOUTS = {"Dzień A (Push)": ["Pompki z plecakiem 15kg", "Floor Press 24kg", "Barki OHP 24kg", "Pompki nogi wyżej", "Pompki z wąskimi rękoma", "Wyprosty za głowę"], "Dzień B (Pull)": ["Podciąganie", "Wiosłowanie 24kg+15kg", "Wiosłowanie hantlami 7kg", "Biceps hantle", "Plank z plecakiem 15kg"], "Dzień C (Nogi)": ["Bułgarskie przysiady", "RDL 24kg+15kg", "Hip Thrust 24kg", "Wykroki 7kg", "Wznosy nóg"], "Bieganie": ["Bieganie 35-40 min"], "Dzień Wolny": ["Rest Day"]}
 
 # --- SIDEBAR ---
 st.sidebar.title("👤 PROFIL")
-profile_type = st.sidebar.radio("Użytkownik:", ["Mój Profil", "Custom"])
-db_file = "progress_me.csv" if profile_type == "Mój Profil" else "progress_user.csv"
+profile_type = st.sidebar.radio("Użytkownik:", ["Mój Profil", "Vault (Baza DB)"])
+
+if profile_type == "Mój Profil":
+    db_file = "progress_me.csv"
+    st.session_state.ml.reload_data()
+    current_user_id = None
+else:
+    all_users = st.session_state.db.get_all_users()
+    if all_users.empty:
+        st.sidebar.warning("Baza pusta. Dodaj użytkownika.")
+        if st.sidebar.button("➕ DODAJ TESTOWEGO"):
+            st.session_state.db.add_user("Tester", 30, 185, "Mężczyzna", 1.55, "masa", 3000, 180, 3.5)
+            st.rerun()
+    selected_user = st.sidebar.selectbox("Wybierz profil:", all_users['name'].tolist())
+    user_data = st.session_state.db.get_user_by_name(selected_user)
+    current_user_id = user_data['id']
+    # Sync settings with DB user
+    st.session_state.ai_cfg["weight"] = 80.0 # Default if no progress
+    progress = st.session_state.db.get_user_progress(current_user_id)
+    if not progress.empty:
+        st.session_state.ai_cfg["weight"] = progress['weight'].iloc[-1]
+    
+    st.session_state.ml.set_data(progress)
+    st.session_state.target_kcal = user_data['target_kcal']
+    st.session_state.protein_goal = user_data['target_protein']
+    st.session_state.water_goal = user_data['water_goal']
 
 st.sidebar.divider()
 log_date = st.sidebar.date_input("📅 Data wpisu:", datetime.date.today())
@@ -101,13 +133,52 @@ with c_log2:
 st.sidebar.divider()
 if st.sidebar.button("💾 ZAPISZ CAŁY DZIEŃ"):
     workout_str = ", ".join(st.session_state.workout_session) if st.session_state.workout_session else "Rest Day"
-    new_data = pd.DataFrame([{"Data": str(log_date), "Waga": st.session_state.ai_cfg["weight"], "Woda": total_hydration, "Kcal": total_kcal, "Bialko": total_p, "Wegle": 0, "Tluszcze": 0, "Trening": workout_str, "Skladniki": "Logged", "RPE": daily_rpe, "Sen_Jakosc": daily_sleep, "Cel_Kcal": st.session_state.target_kcal, "Cel_Bialko": st.session_state.protein_goal}])
-    if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
-    else: new_data.to_csv(db_file, mode='a', header=False, index=False)
-    st.session_state.ml.reload_data() # ODŚWIEŻENIE ML
+    if profile_type == "Mój Profil":
+        new_data = pd.DataFrame([{"Data": str(log_date), "Waga": st.session_state.ai_cfg["weight"], "Woda": total_hydration, "Kcal": total_kcal, "Bialko": total_p, "Wegle": 0, "Tluszcze": 0, "Trening": workout_str, "Skladniki": "Logged", "RPE": daily_rpe, "Sen_Jakosc": daily_sleep, "Cel_Kcal": st.session_state.target_kcal, "Cel_Bialko": st.session_state.protein_goal}])
+        if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
+        else: new_data.to_csv(db_file, mode='a', header=False, index=False)
+    else:
+        st.session_state.db.add_progress(current_user_id, str(log_date), st.session_state.ai_cfg["weight"], total_hydration, total_kcal, total_p, 0, 0, workout_str, daily_rpe, daily_sleep)
+    
+    st.session_state.ml.reload_data()
     st.session_state.extra_meals = []; st.session_state.workout_session = []; st.session_state.meal_water = 0.0; st.rerun()
 
 st.divider()
+
+# --- VAULT & API INSIGHTS ---
+if profile_type != "Mój Profil" and current_user_id:
+    st.header("🧠 Vault Insights (Mielenie Danych)")
+    v1, v2, v3 = st.columns(3)
+    status = st.session_state.ae.get_user_status(current_user_id)
+    if status:
+        with v1:
+            st.subheader("🌐 Global Benchmarks")
+            st.write(f"Cel: **{status['user']['goal']}**")
+            st.write(f"Sugerowane Białko: {status['benchmarks']['avg_p_kg']} g/kg")
+            st.write(f"Recovery Days: {status['benchmarks']['recovery_days']}")
+        with v2:
+            st.subheader("🧪 API Interpretacja")
+            for insight in status['api_insights']:
+                st.info(insight)
+        with v3:
+            st.subheader("⚙️ Optymalizacja ML")
+            opt_source = st.radio("Źródło korekty:", ["API Insights", "Population (Kaggle)"], horizontal=True)
+            source_key = "api" if opt_source == "API Insights" else "kaggle"
+            
+            refined_kcal = st.session_state.ae.refine_ml_parameters(current_user_id, st.session_state.target_kcal, source=source_key)
+            
+            if status.get('population_benchmarks'):
+                st.caption(f"Średnia Kaggle: {status['population_benchmarks']['avg_kcal']} kcal")
+            
+            if refined_kcal != st.session_state.target_kcal:
+                st.warning(f"Sugerowana korekta: {st.session_state.target_kcal} -> {refined_kcal}")
+                if st.button("✅ ZASTOSUJ KOREKTĘ", key="apply_refine_btn"):
+                    st.session_state.target_kcal = refined_kcal
+                    st.rerun()
+            else:
+                st.success("Parametry optymalne.")
+    st.divider()
+
 ai1, ai2, ai3, ai4 = st.columns(4)
 with ai1:
     st.subheader("📉 Trend Wagi")
@@ -178,25 +249,40 @@ with col_right:
             st.rerun()
     day = st.selectbox("Dzień:", list(MY_WORKOUTS.keys()))
     ex_name = st.selectbox("Ćwiczenie:", MY_WORKOUTS[day])
+    
+    is_running = "Bieganie" in day
+    is_rest = "Dzień Wolny" in day
     base_w = 15.0 if "15kg" in ex_name else 24.0 if "24kg" in ex_name else 0.0
-    is_var = st.checkbox("Różne powtórzenia?", key="is_var_check")
-    with st.form("workout_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns([1, 1, 2])
-        extra_w = c1.number_input("Extra kg", value=0.0, step=0.5)
-        if is_var:
-            reps_str = c3.text_input("Powtórzenia (np. 12,10,8)")
-            sets_count = 0
-        else:
-            sets_count = c2.number_input("Serie", value=3, min_value=1)
-            reps_val = c3.number_input("Powtórzenia", value=10, min_value=1)
-            reps_str = str(reps_val)
-        if st.form_submit_button("➕ DODAJ ĆWICZENIE"):
-            if is_var and reps_str:
-                count = len(reps_str.split(","))
-                st.session_state.workout_session.append(f"{ex_name}({count}x{base_w + extra_w}kg x {reps_str})")
-            elif not is_var:
-                st.session_state.workout_session.append(f"{ex_name}({sets_count}x{base_w + extra_w}kg x {reps_str})")
+    
+    if is_rest:
+        if st.button("➕ DODAJ DZIEŃ WOLNY"):
+            st.session_state.workout_session.append("Rest Day")
             st.rerun()
+    elif not is_running:
+        is_var = st.checkbox("Różne powtórzenia?", key="is_var_check")
+        with st.form("workout_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns([1, 1, 2])
+            extra_w = c1.number_input("Extra kg", value=0.0, step=0.5)
+            if is_var:
+                reps_str = c3.text_input("Powtórzenia (np. 12,10,8)")
+                sets_count = 0
+            else:
+                sets_count = c2.number_input("Serie", value=3, min_value=1)
+                reps_val = c3.number_input("Powtórzenia", value=10, min_value=1)
+                reps_str = str(reps_val)
+            if st.form_submit_button("➕ DODAJ ĆWICZENIE"):
+                if is_var and reps_str:
+                    count = len(reps_str.split(","))
+                    st.session_state.workout_session.append(f"{ex_name}({count}x{base_w + extra_w}kg x {reps_str})")
+                elif not is_var:
+                    st.session_state.workout_session.append(f"{ex_name}({sets_count}x{base_w + extra_w}kg x {reps_str})")
+                st.rerun()
+    else:
+        with st.form("running_form", clear_on_submit=True):
+            run_kcal = st.number_input("Spalone kcal", value=300, step=10)
+            if st.form_submit_button("➕ DODAJ BIEGANIE"):
+                st.session_state.workout_session.append(f"Bieganie ({run_kcal} kcal)")
+                st.rerun()
 
 if not st.session_state.ml.df.empty:
     st.divider()

@@ -26,12 +26,30 @@ Model analizuje szeregi czasowe, wykrywając sezonowość i punkty krytyczne wag
 *   **Parser:** Wykorzystuje wyrażenia regularne (Regex) do wyciągania tonażu z tekstu.
 *   **Korelacja Pearsona:** Bada statystyczny wpływ jakości snu na łączną objętość sesji.
 
+### 5. Multi-User Vault & API Analytics (New!)
+*   **Baza SQL (SQLite)**: Przejście z prostych plików CSV na relacyjną bazę danych `health_vault.db` dla wielu użytkowników.
+*   **API Connector**: Integracja z zewnętrznym API do 'mielenia' danych i pobierania rynkowych benchmarków.
+*   **Cross-User Analytics**: Moduł `AnalyticsEngine` analizujący korelacje między snem, celem a objętością treningową w celu optymalizacji parametrów modelu.
+*   **Refine ML**: System automatycznej korekty `target_kcal` na podstawie współczynnika optymalizacji z API.
+
+### 6. Skala RPE (Rate of Perceived Exertion)
+Jak wybierać trudność treningu?
+*   **10**: Max wysiłek, brak możliwości wykonania kolejnego powtórzenia.
+*   **9**: Bardzo ciężko, 1 powtórzenie w zapasie (RIR 1).
+*   **8**: Ciężko, 2 powtórzenia w zapasie (RIR 2).
+*   **7**: Solidny trening, kontrolowany ciężar, 3-4 powtórzenia w zapasie.
+*   **1-5**: Rozgrzewka, cardio o niskiej intensywności lub regeneracja.
+
 ---
 
 ## 🛠️ Poprawki User-Centric (Human-Driven Improvements)
 Dzisiejsze kluczowe zmiany wprowadzone na prośbę użytkownika:
 
-*   <u>**Persistence Settings**</u>: Wszystkie dane w panelu AI (wiek, wzrost, cele) są teraz zapisywane w lokalnym pliku JSON – koniec z wpisywaniem danych po każdym restarcie!
+*   **Multi-User Vault**: Nowy tryb "Vault" w sidebarze pozwala na tworzenie wielu profili i bezpieczne przechowywanie ich danych w bazie SQL.
+*   **Kaggle Population Analytics**: Integracja 1000 rekordów syntetycznych (docelowo MyFitnessPal) do porównywania Twoich wyników z globalnymi trendami.
+*   **Dynamic Cardio Forms**: Inteligentny formularz, który dla "Biegania" pyta o spalone kcal zamiast serii, a dla "Dnia Wolnego" oferuje szybki zapis "Rest Day".
+*   **ML Hybrid Optimization**: Możliwość wyboru źródła autokorekty parametrów: API (lokalne) lub Kaggle (populacyjne).
+*   <u>**Persistence Settings**</u>: Wszystkie dane w panelu AI (wiek, wzrost, cele) są teraz zapisywane w lokalnym pliku JSON.
 *   <u>**Fitatu UI Order**</u>: Przebudowano formularz dodawania makroskładników (Białko -> Tłuszcz -> Węgle) dla płynnej obsługi klawiszem `Tab`.
 *   <u>**Mixed Reps Logging**</u>: Możliwość logowania serii o różnej ilości powtórzeń (np. `12,10,8`) zamiast stałych wartości.
 *   <u>**Load Last Workout**</u>: Funkcja "Wczytaj ostatni trening" – system przeszukuje historię i jednym kliknięciem kopiuje ostatnią udaną sesję do obecnego logu.
