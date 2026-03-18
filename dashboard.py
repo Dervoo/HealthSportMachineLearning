@@ -46,6 +46,41 @@ if "water_goal" not in st.session_state: st.session_state.water_goal = st.sessio
 MY_MEALS = [{"name": "High Protein Milk", "kcal": 130, "p": 20.0, "c": 12.0, "f": 0.6}, {"name": "Soy Protein (30g)", "kcal": 109, "p": 25.8, "c": 1.2, "f": 0.1}, {"name": "Twaróg Chudy (230g)", "kcal": 202, "p": 41.4, "c": 8.1, "f": 0.5}]
 MY_WORKOUTS = {"Dzień A (Push)": ["Pompki z plecakiem 15kg", "Floor Press 24kg", "Barki OHP 24kg", "Pompki nogi wyżej", "Pompki z wąskimi rękoma", "Wyprosty za głowę"], "Dzień B (Pull)": ["Podciąganie", "Wiosłowanie 24kg+15kg", "Wiosłowanie hantlami 7kg", "Biceps hantle", "Plank z plecakiem 15kg"], "Dzień C (Nogi)": ["Bułgarskie przysiady", "RDL 24kg+15kg", "Hip Thrust 24kg", "Wykroki 7kg", "Wznosy nóg"], "Bieganie": ["Bieganie 35-40 min"], "Dzień Wolny": ["Rest Day"]}
 
+# --- EDAMAM CONFIG ---
+try:
+    EDAMAM_APP_ID = st.secrets["EDAMAM_APP_ID"]
+    EDAMAM_APP_KEY = st.secrets["EDAMAM_APP_KEY"]
+except:
+    EDAMAM_APP_ID = ""
+    EDAMAM_APP_KEY = ""
+
+def search_edamam_products(query):
+    if not EDAMAM_APP_ID or not EDAMAM_APP_KEY:
+        return []
+    url = f"https://api.edamam.com/api/food-database/v2/parser?app_id={EDAMAM_APP_ID}&app_key={EDAMAM_APP_KEY}&ingr={query}&nutrition-type=logging"
+    try:
+        res = requests.get(url).json()
+        results = []
+        for item in res.get("hints", []):
+            food = item["food"]
+            nutrients = food.get("nutrients", {})
+            results.append({
+                "display_name": f"🌐 {food['label']} ({food.get('category', 'Food')})",
+                "full_name": food['label'],
+                "kcal": round(nutrients.get("ENERC_KCAL", 0)),
+                "p": round(nutrients.get("PROCNT", 0), 1),
+                "c": round(nutrients.get("CHOCDF", 0), 1),
+                "f": round(nutrients.get("FAT", 0), 1)
+            })
+        return results
+    except: return []
+
+def load_products():
+    try:
+        with open("data/products.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except: return {}
+
 # --- SIDEBAR ---
 st.sidebar.title("👤 PROFIL")
 profile_type = st.sidebar.radio("Użytkownik:", ["Mój Profil", "Vault (Baza DB)"])
@@ -211,13 +246,48 @@ with col_left:
     st.header("🍱 Baza")
     sq = st.text_input("Szukaj:")
     if sq:
-        lm = [{"name": n, "kcal": i["kcal"], "p": i["p"]} for n, i in st.session_state.ml.products.items() if sq.lower() in n.lower()]
-        if lm:
-            sel = st.selectbox("Wynik:", [x["name"] for x in lm])
+        # Local Matches
+        local_matches = [{"display_name": f"🏠 {n}", "full_name": n, "kcal": i["kcal"], "p": i["p"], "c": i.get("c",0), "f": i.get("f",0)} 
+                         for n, i in st.session_state.ml.products.items() if sq.lower() in n.lower()]
+        
+        # Edamam Trigger
+        col_btn1, col_btn2 = st.columns(2)
+        if col_btn1.button("🌐 SZUKAJ GLOBALNIE"):
+            with st.spinner("Mielę dane z Edamam..."):
+                st.session_state.api_results = search_edamam_products(sq)
+        if col_btn2.button("🧹 CZYŚĆ"):
+            st.session_state.api_results = []
+            st.rerun()
+
+        all_results = local_matches + st.session_state.api_results
+        
+        if all_results:
+            sel_name = st.selectbox("Wynik:", [x["display_name"] for x in all_results])
+            sel_prod = next(x for x in all_results if x["display_name"] == sel_name)
+            
             gr = st.number_input("Gramy", value=100, step=10)
+            mult = gr / 100.0
+            
+            st.info(f"📊 {sel_prod['full_name']} ({gr}g)\n\n**{round(sel_prod['kcal']*mult)} kcal** | B: {round(sel_prod['p']*mult,1)} | W: {round(sel_prod['c']*mult,1)} | T: {round(sel_prod['f']*mult,1)}")
+            
             if st.button("✅ DODAJ PRODUKT"):
-                p = next(x for x in lm if x["name"] == sel)
-                st.session_state.extra_meals.append({"name": f"{p['name']} ({gr}g)", "kcal": round(p['kcal']*(gr/100)), "p": round(p['p']*(gr/100),1), "c": 0, "f": 0})
+                # Add to session
+                st.session_state.extra_meals.append({
+                    "name": f"{sel_prod['full_name']} ({gr}g)", 
+                    "kcal": round(sel_prod['kcal']*mult), 
+                    "p": round(sel_prod['p']*mult,1), 
+                    "c": round(sel_prod['c']*mult,1), 
+                    "f": round(sel_prod['f']*mult,1)
+                })
+                
+                # Auto-save global to local
+                if "🌐" in sel_name:
+                    current_db = load_products()
+                    if sel_prod["full_name"] not in current_db:
+                        current_db[sel_prod["full_name"]] = {"kcal": sel_prod["kcal"], "p": sel_prod["p"], "c": sel_prod["c"], "f": sel_prod["f"]}
+                        with open("data/products.json", "w", encoding="utf-8") as f:
+                            json.dump(current_db, f, indent=4, ensure_ascii=False)
+                        st.session_state.ml.reload_data() # Refresh ML engine products
                 st.rerun()
 
 with col_mid:
