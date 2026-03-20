@@ -1,32 +1,67 @@
 # Health & Sport Machine Learning Optimizer 🚀
 
-Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymalizacji procesów przy użyciu Reinforcement Learning.
+Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymalizacji procesów przy użyciu zaawansowanych modeli matematycznych i ML.
 
 ## 🌟 Funkcje
-*   **Mielarka Sugestii (Baza Produktów)**: Pozwala na wybór produktów z bazy JSON (`data/products.json`). Po wybraniu produktu i podaniu wagi, system automatycznie przelicza kalorie oraz makroskładniki.
-*   **Domyślne Posiłki**: W profilu `info.md` system automatycznie dolicza 441 kcal (Milk Product, Soy Protein, Twaróg). Można to wyłączyć w pasku bocznym (checkbox "Pomiń posiłki domyślne").
-*   **Dodawanie Ręczne**: Precyzyjne wprowadzanie Kcal i makroskładników dla produktów spoza bazy.
-*   **Dzienny Log**: Podgląd produktów wprowadzonych w danym dniu przed zapisem.
-*   **Historia i Szczegóły**: Wykresy wagi oraz dokładny wgląd w historyczne dni.
-*   **Ewaluaator Ćwiczeń**: Ocena treningu pod kątem Twojego profilu (tylko dla profilu Custom).
+*   **AI SMART GOAL**: Automatyczne wyliczanie zapotrzebowania kcal i białka (Mifflin-St Jeor).
+*   **Diet Optimizer (LP)**: Precyzyjne dobieranie posiłków przy użyciu programowania liniowego (`scipy.optimize`).
+*   **Weight Trend (Prophet)**: Zaawansowane prognozowanie wagi i wykrywanie zastojów (**Plateau Detection**).
+*   **Training Analytics (Volume)**: Automatyczne parsowanie logów treningowych i obliczanie tonażu (objętości).
+*   **AI Recommendation**: Sugestie treningowe na bazie regeneracji i korelacji sen-siła.
+*   **Mielarka Sugestii**: Integracja z API Edamam i lokalną bazą produktów.
 
-## 🛠️ Technologie
-*   **Python / Streamlit**
-*   **Pandas / JSON**
-*   **Git (Conventional Commits)**
+## 🧠 Dokumentacja Modeli i Wzorów
 
-## 📋 Instrukcja Obsługi Bazy Produktów
-1.  **Dodawanie**: Aby dodać nowy produkt do bazy, edytuj plik `data/products.json` dodając wpis w formacie: `"Nazwa": {"kcal": X, "p": X, "c": X, "f": X}` (wartości na 100g).
-2.  **Użycie**: W sekcji "Mielarka Sugestii" wybierz produkt z listy, wpisz wagę w gramach i kliknij "DODAJ (AUTO-CALC)".
+### 1. Obliczanie Zapotrzebowania (AI SMART GOAL)
+System wykorzystuje wzór **Mifflin-St Jeor** oraz współczynnik **PAL**.
+*   **Nowość ML:** System automatycznie wylicza cel nawodnienia: $\text{waga} \times 0.033 + \text{bonus aktywności}$.
 
-## 📋 Instrukcja Obsługi Agenta (Gemini CLI)
-Agent operuje zgodnie z zasadami zawartymi w `info.md`. Główne zasady to:
-1.  **Conventional Commits**: Każda zmiana musi być commitowana zgodnie ze standardem v1.0.0.
-2.  **Pull Requests**: Każdy update musi być wdrażany przez Pull Request.
-3.  **Ton i Format**: Senior Developer - chłodny, profesjonalny, techniczny.
-4.  **Human Control & Verification**: Każda akcja agenta (szczególnie modyfikacje plików instrukcyjnych, `info.md` czy struktury projektu) **musi być bezwzględnie weryfikowana przez człowieka**. Agent może popełniać błędy w logice nadpisywania plików lub proponować nieoptymalne rozwiązania, dlatego ostateczna kontrola i akceptacja zmian leży po stronie użytkownika.
+### 2. Optymalizacja Diety (Linear Programming)
+Wykorzystuje solver `highs` z biblioteki `scipy.optimize.linprog` do minimalizacji nadmiaru kcal przy zachowaniu minimum białkowego.
+
+### 3. Prognozowanie Trendu i Plateau (Facebook Prophet)
+Model analizuje szeregi czasowe, wykrywając sezonowość i punkty krytyczne wagi. Sugeruje **Refeed Day**, gdy zmiana wagi < 0.2kg/14 dni.
+
+### 4. Analiza Objętości i Korelacji (Workout ML)
+*   **Parser:** Wykorzystuje wyrażenia regularne (Regex) do wyciągania tonażu z tekstu.
+*   **Korelacja Pearsona:** Bada statystyczny wpływ jakości snu na łączną objętość sesji.
+
+### 5. Multi-User Vault & API Analytics (New!)
+*   **Baza SQL (SQLite)**: Przejście z prostych plików CSV na relacyjną bazę danych `health_vault.db` dla wielu użytkowników.
+*   **API Connector**: Integracja z zewnętrznym API do 'mielenia' danych i pobierania rynkowych benchmarków.
+*   **Cross-User Analytics**: Moduł `AnalyticsEngine` analizujący korelacje między snem, celem a objętością treningową w celu optymalizacji parametrów modelu.
+*   **Refine ML**: System automatycznej korekty `target_kcal` na podstawie współczynnika optymalizacji z API.
+
+### 6. Skala RPE (Rate of Perceived Exertion)
+Jak wybierać trudność treningu?
+*   **10**: Max wysiłek, brak możliwości wykonania kolejnego powtórzenia.
+*   **9**: Bardzo ciężko, 1 powtórzenie w zapasie (RIR 1).
+*   **8**: Ciężko, 2 powtórzenia w zapasie (RIR 2).
+*   **7**: Solidny trening, kontrolowany ciężar, 3-4 powtórzenia w zapasie.
+*   **1-5**: Rozgrzewka, cardio o niskiej intensywności lub regeneracja.
+
+---
+
+## 🛠️ Poprawki User-Centric (Human-Driven Improvements)
+Dzisiejsze kluczowe zmiany wprowadzone na prośbę użytkownika:
+
+*   **Multi-User Vault**: Nowy tryb "Vault" w sidebarze pozwala na tworzenie wielu profili i bezpieczne przechowywanie ich danych w bazie SQL.
+*   **Kaggle Population Analytics**: Integracja 1000 rekordów syntetycznych (docelowo MyFitnessPal) do porównywania Twoich wyników z globalnymi trendami.
+*   **Dynamic Cardio Forms**: Inteligentny formularz, który dla "Biegania" pyta o spalone kcal zamiast serii, a dla "Dnia Wolnego" oferuje szybki zapis "Rest Day".
+*   **ML Hybrid Optimization**: Możliwość wyboru źródła autokorekty parametrów: API (lokalne) lub Kaggle (populacyjne).
+*   <u>**Persistence Settings**</u>: Wszystkie dane w panelu AI (wiek, wzrost, cele) są teraz zapisywane w lokalnym pliku JSON.
+*   <u>**Fitatu UI Order**</u>: Przebudowano formularz dodawania makroskładników (Białko -> Tłuszcz -> Węgle) dla płynnej obsługi klawiszem `Tab`.
+*   <u>**Mixed Reps Logging**</u>: Możliwość logowania serii o różnej ilości powtórzeń (np. `12,10,8`) zamiast stałych wartości.
+*   <u>**Load Last Workout**</u>: Funkcja "Wczytaj ostatni trening" – system przeszukuje historię i jednym kliknięciem kopiuje ostatnią udaną sesję do obecnego logu.
+*   <u>**Smart Backpack Weights**</u>: System rozpoznaje bazowe obciążenia (np. plecak 15kg) i pozwala na dodawanie do nich wartości "Extra".
+*   <u>**Retro-Logging**</u>: Możliwość wyboru daty wpisu (dzisiaj/wczoraj/dowolna data), co pozwala na uzupełnianie danych z opóźnieniem.
+*   <u>**Advanced Hydration**</u>: Dodanie logowania ziół (liczone jako 90% wody) oraz wody z posiłków (zupy, koktajle).
+*   <u>**UI Visibility Fix**</u>: Całkowita poprawka stylów CSS – białe czcionki na ciemnych kafelkach dla maksymalnej czytelności.
 
 ## 🚀 Uruchomienie
+Wymagane biblioteki: `streamlit`, `pandas`, `scipy`, `scikit-learn`, `prophet`.
+
 ```bash
+py -m pip install streamlit pandas scipy scikit-learn prophet
 py -m streamlit run dashboard.py
 ```
