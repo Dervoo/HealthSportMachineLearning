@@ -16,6 +16,29 @@ if "db" not in st.session_state:
     st.session_state.db = DBManager()
 if "ae" not in st.session_state:
     st.session_state.ae = AnalyticsEngine()
+# --- EDAMAM CONFIG (Keys stored safely in .streamlit/secrets.toml) ---
+try:
+    EDAMAM_APP_ID = st.secrets["EDAMAM_APP_ID"]
+    EDAMAM_APP_KEY = st.secrets["EDAMAM_APP_KEY"]
+except:
+    EDAMAM_APP_ID = ""
+    EDAMAM_APP_KEY = ""
+
+# --- INITIAL SESSION STATE ---
+if "extra_meals" not in st.session_state: st.session_state.extra_meals = []
+if "api_results" not in st.session_state: st.session_state.api_results = []
+if "last_query" not in st.session_state: st.session_state.last_query = ""
+if "api_session" not in st.session_state:
+    st.session_state.api_session = requests.Session()
+
+# --- CONSTANTS (MY PROFILE) ---
+MY_DATA = {
+    "weight": 78.1,
+    "target_kcal": 1900,
+    "protein_goal": 180,
+    "water_goal": 2.5,
+    "db": "progress_me.csv"
+}
 
 # --- ML ENGINE ---
 if "ml" not in st.session_state or not hasattr(st.session_state.ml, "calculate_water_requirement"):
@@ -78,6 +101,50 @@ def search_edamam_products(query):
             })
         return results
     except: return []
+# --- PROFILE MANAGEMENT ---
+st.sidebar.title("👤 PROFIL")
+profile_type = st.sidebar.radio("Użytkownik:", ["Mój Profil (info.md)", "Nowy Użytkownik (Custom)"])
+skip_defaults = st.sidebar.checkbox("Pomiń domyślne (441 kcal)", value=False)
+
+if profile_type == "Mój Profil (info.md)":
+    active_data = MY_DATA
+    active_meals = [] if skip_defaults else MY_MEALS
+    active_workouts = MY_WORKOUTS
+else:
+    if os.path.exists("user_config.json"):
+        with open("user_config.json", "r") as f:
+            u_cfg = json.load(f)
+    else:
+        u_cfg = {"weight": 80.0, "target_kcal": 2000, "protein_goal": 150, "water_goal": 2.0, "workouts": {}}
+    
+    st.sidebar.subheader("⚙️ Konfiguracja")
+    u_w = st.sidebar.number_input("Waga (kg)", value=float(u_cfg["weight"]))
+    u_kcal = st.sidebar.number_input("Kcal", value=int(u_cfg["target_kcal"]))
+    u_p = st.sidebar.number_input("Białko (g)", value=int(u_cfg["protein_goal"]))
+    
+    active_data = {"weight": u_w, "target_kcal": u_kcal, "protein_goal": u_p, "water_goal": 2.0, "db": "progress_user.csv"}
+    active_meals = []
+    active_workouts = u_cfg.get("workouts", {"Dzień A": ["Przysiady"], "Dzień B": ["Pompki"], "Dzień C": ["Bieganie"]})
+
+# --- GLOBAL STYLES ---
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; color: #ffffff; }
+    .stMetric { background-color: #1e2130; padding: 20px; border-radius: 12px; border: 1px solid #00d4ff; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    [data-testid="stMetricLabel"] { color: #00d4ff !important; font-size: 1.1rem !important; font-weight: bold !important; }
+    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2rem !important; font-weight: bold !important; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #ff4b4b; color: white; font-weight: bold; }
+    .product-preview { 
+        background-color: #1e2130; 
+        color: #ffffff !important; 
+        padding: 15px; 
+        border-radius: 10px; 
+        border: 1px solid #00d4ff; 
+        margin-bottom: 15px;
+    }
+    .product-preview b { color: #00d4ff; }
+    </style>
+    """, unsafe_allow_html=True)
 
 def load_products():
     try:
@@ -119,6 +186,52 @@ log_date = st.sidebar.date_input("📅 Data wpisu:", datetime.date.today())
 daily_rpe = st.sidebar.select_slider("🧠 RPE (Trudność)", options=list(range(1, 11)), value=st.session_state.daily_rpe)
 daily_sleep = st.sidebar.select_slider("😴 Sen (Jakość)", options=list(range(1, 6)), value=st.session_state.daily_sleep)
 
+    except FileNotFoundError: return {}
+
+@st.cache_data(ttl=3600)
+def search_edamam_products(query):
+    if not query or len(query) < 3 or not EDAMAM_APP_ID:
+        return []
+    
+    url = "https://api.edamam.com/api/food-database/v2/parser"
+    params = {
+        "app_id": EDAMAM_APP_ID,
+        "app_key": EDAMAM_APP_KEY,
+        "ingr": query,
+        "nutrition-type": "cooking"
+    }
+    
+    try:
+        response = st.session_state.api_session.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            hints = response.json().get("hints", [])
+            results = []
+            for h in hints:
+                food = h.get("food", {})
+                name = food.get("label")
+                brand = food.get("brand", "Generic")
+                nutriments = food.get("nutrients", {})
+                
+                results.append({
+                    "display_name": f"🌐 {name} ({brand})",
+                    "full_name": name,
+                    "kcal": float(nutriments.get("ENERC_KCAL", 0)),
+                    "p": float(nutriments.get("PROCNT", 0)),
+                    "c": float(nutriments.get("CHOCDF", 0)),
+                    "f": float(nutriments.get("FAT", 0))
+                })
+            return results
+    except: pass
+    return []
+
+PRODUCTS_DB = load_products()
+
+def save_progress(w, water, cals, p, c, f, workout, items, db_file):
+    ingredients = ", ".join([i["name"] for i in items]) if items else "Logged"
+    new_data = pd.DataFrame([{"Data": str(datetime.date.today()), "Waga": w, "Woda": water, "Kcal": cals, "Bialko": p, "Wegle": c, "Tluszcze": f, "Trening": workout, "Skladniki": ingredients}])
+    if not os.path.isfile(db_file): new_data.to_csv(db_file, index=False)
+    else: new_data.to_csv(db_file, mode='a', header=False, index=False)
+# --- UI LOGIC ---
 st.sidebar.divider()
 water_val = st.sidebar.slider("💧 Woda (L)", 0.0, 5.0, value=st.session_state.daily_water, step=0.1)
 herbs_val = st.sidebar.number_input("🌿 Ziółka (L)", 0.0, 2.0, value=st.session_state.daily_herbs, step=0.1)
@@ -134,6 +247,14 @@ with st.sidebar.expander("🤖 AI SMART GOAL"):
         st.session_state.target_kcal, st.session_state.protein_goal, st.session_state.water_goal = smart["target_kcal"], smart["target_p"], smart["water"]
         save_ai_settings({"weight": s_w, "height": 180, "age": 25, "gender": "Mężczyzna", "activity": s_act, "goal": s_goal, "target_kcal": smart["target_kcal"], "protein_goal": smart["target_p"], "water_goal": smart["water"]})
         st.rerun()
+base_p = sum(m["p"] for m in active_meals)
+extra_p = sum(m["p"] for m in st.session_state.extra_meals)
+extra_c = sum(m["c"] for m in st.session_state.extra_meals)
+extra_f = sum(m["f"] for m in st.session_state.extra_meals)
+total_p = base_p + extra_p
+total_c = sum(m["c"] for m in active_meals) + extra_c
+total_f = sum(m["f"] for m in active_meals) + extra_f
+total_kcal = sum(m["kcal"] for m in active_meals) + sum(m["kcal"] for m in st.session_state.extra_meals)
 
 # --- STYLES ---
 st.markdown("""
@@ -276,6 +397,19 @@ with ai4:
     st.write(f"Trend: {insights['trend']}")
     st.caption(f"Ostatnia: {insights['last_vol']} kg")
     st.info(insights['corr'])
+with st.expander("📝 DZIENNY LOG", expanded=True):
+    if st.session_state.extra_meals:
+        st.table(pd.DataFrame(st.session_state.extra_meals))
+        if st.button("🗑️ WYCZYŚĆ LOG"):
+            st.session_state.extra_meals = []
+            st.rerun()
+    else: st.info("Dodaj coś poniżej.")
+
+if st.sidebar.button("💾 ZAPISZ DZIEŃ"):
+    workout_log = st.session_state.get("workout_status", "Rest Day")
+    save_progress(current_weight, water_drank, total_kcal, total_p, total_c, total_f, workout_log, st.session_state.extra_meals, active_data["db"])
+    st.sidebar.success("Zapisano!")
+    st.session_state.extra_meals = []
 
 st.divider()
 col_left, col_mid, col_right = st.columns([1, 1, 1.2])
@@ -345,6 +479,84 @@ with col_mid:
             kcal = m_k if m_k else int((m_p or 0)*4 + (m_c or 0)*4 + (m_f or 0)*9)
             st.session_state.extra_meals.append({"name": m_n or "Ręczny", "kcal": kcal, "p": m_p or 0.0, "c": m_c or 0.0, "f": m_f or 0.0})
             st.session_state.meal_water += (m_water / 1000.0)
+    st.header("🍱 Mielarka Sugestii")
+    st.caption("Błyskawiczne API Edamam (wymaga klucza).")
+    search_query = st.text_input("🔍 Szukaj produktu:", placeholder="Np. Chicken, Skyr...")
+    
+    if search_query != st.session_state.last_query:
+        st.session_state.api_results = []
+        st.session_state.last_query = search_query
+
+    if search_query:
+        local_matches = []
+        if PRODUCTS_DB:
+            for p_name, p_info in PRODUCTS_DB.items():
+                if search_query.lower() in p_name.lower():
+                    local_matches.append({"display_name": f"🏠 [Lokalnie] {p_name}", "full_name": p_name, "kcal": p_info["kcal"], "p": p_info["p"], "c": p_info["c"], "f": p_info["f"]})
+        
+        if not EDAMAM_APP_ID:
+            st.warning("⚠️ Brak klucza API Edamam w kodzie. Edytuj dashboard.py!")
+        elif st.button("🌐 SZUKAJ W GLOBALNEJ BAZIE"):
+            with st.spinner("Pobieram dane (Turbo)..."):
+                st.session_state.api_results = search_edamam_products(search_query)
+
+        # ALL RESULTS: API FIRST, THEN LOCAL
+        all_results = st.session_state.api_results + local_matches
+        
+        if all_results:
+            options = {res["display_name"]: res for res in all_results}
+            choice = st.selectbox("Wybierz wynik (Globalne na górze):", list(options.keys()))
+            if choice:
+                prod = options[choice]
+                
+                gram_input = st.number_input("Waga Twojej porcji (g)", value=100, step=10, min_value=1, key="gram_in")
+                mult = gram_input / 100.0
+                p_kcal = round(prod["kcal"] * mult, 1)
+                p_p = round(prod["p"] * mult, 1)
+                p_c = round(prod["c"] * mult, 1)
+                p_f = round(prod["f"] * mult, 1)
+
+                st.markdown(f"""
+                <div class='product-preview'>
+                    <b>KALKULATOR PORCJI ({gram_input}g):</b><br>
+                    🔥 Energia: <b>{p_kcal} kcal</b><br>
+                    🍖 Białko: <b>{p_p}g</b> | 🍞 Węgle: <b>{p_c}g</b> | 🥑 Tłuszcze: <b>{p_f}g</b>
+                    <br><small style='color: #888;'>Dane na 100g: {prod['kcal']} kcal | B: {prod['p']} | W: {prod['c']} | T: {prod['f']}</small>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if st.button("✅ DODAJ I ZAPISZ W BAZIE"):
+                    # 1. Add to daily log
+                    st.session_state.extra_meals.append({
+                        "name": f"{prod['full_name']} ({gram_input}g)", 
+                        "kcal": p_kcal, "p": p_p, "c": p_c, "f": p_f
+                    })
+                    
+                    # 2. Auto-save to local JSON if it's from API
+                    if "🌐" in prod["display_name"]:
+                        new_local_db = load_products()
+                        if prod["full_name"] not in new_local_db:
+                            new_local_db[prod["full_name"]] = {
+                                "kcal": prod["kcal"],
+                                "p": prod["p"],
+                                "c": prod["c"],
+                                "f": prod["f"]
+                            }
+                            with open("data/products.json", "w", encoding="utf-8") as f:
+                                json.dump(new_local_db, f, indent=4, ensure_ascii=False)
+                            st.success(f"Produkt {prod['full_name']} został dopisany do bazy lokalnej!")
+                    
+                    st.rerun()
+    else: st.info("Wpisz nazwę.")
+
+with col_mid:
+    st.header("🥗 Dodaj Ręcznie")
+    m_name = st.text_input("Nazwa produktu", key="m_name")
+    m_kcal = st.number_input("Kcal", min_value=0, step=1)
+    m_p = st.number_input("Białko (g)", min_value=0.0, step=0.1)
+    if st.button("➕ DODAJ RĘCZNIE"):
+        if m_name:
+            st.session_state.extra_meals.append({"name": m_name, "kcal": m_kcal, "p": m_p, "c": 0, "f": 0})
             st.rerun()
 
 with col_right:
@@ -408,3 +620,12 @@ if not st.session_state.ml.df.empty:
             st.line_chart(vol_df.set_index("Data")["Objetosc"])
         else:
             st.info("Loguj treningi z ciężarem, aby zobaczyć wykres objętości.")
+    selected_day = st.selectbox("Dzień:", list(active_workouts.keys()))
+    for ex in active_workouts[selected_day]:
+        st.checkbox(ex, key=f"chk_{ex}")
+
+st.divider()
+if os.path.isfile(active_data["db"]):
+    st.header("📈 Historia")
+    history_df = pd.read_csv(active_data["db"])
+    st.line_chart(history_df.set_index("Data")["Waga"])
