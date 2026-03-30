@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 
 void main() {
   runApp(const HealthMLApp());
@@ -34,13 +36,18 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // NOTE: Use '10.0.2.2' for Android Emulator, 'localhost' for iOS/Web/Desktop
-  static const String API_BASE = 'http://localhost:8000';
+  String get _apiBase {
+    if (kIsWeb) return 'http://localhost:8000';
+    try {
+      if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+    } catch (_) {}
+    return 'http://localhost:8000';
+  }
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
     
-    final url = Uri.parse('$API_BASE/auth/token');
+    final url = Uri.parse('$_apiBase/auth/token');
     
     try {
       // OAuth2PasswordRequestForm expects form-data
