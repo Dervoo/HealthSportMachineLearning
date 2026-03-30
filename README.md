@@ -17,15 +17,16 @@ Projekt ewoluował w ekosystem **Web + Mobile + API**:
 ### 1. Web Dashboard (Analityka ML)
 Wymagane biblioteki: `streamlit`, `pandas`, `scipy`, `scikit-learn`, `prophet`.
 ```powershell
-python -m pip install -r requirements.txt
-python -m streamlit run dashboard.py
+# Rekomendowana metoda na Windows
+py -m pip install -r requirements.txt
+py -m streamlit run dashboard.py
 ```
 
 ### 2. Backend API (Dla Mobile)
 Umożliwia synchronizację danych i logowanie użytkowników.
 ```powershell
 # Uruchomienie serwera na porcie 8000
-python backend/main.py
+py backend/main.py
 ```
 
 ### 3. Aplikacja Mobilna (Flutter)
