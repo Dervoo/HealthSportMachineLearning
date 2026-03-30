@@ -38,6 +38,8 @@ if "extra_meals" not in st.session_state: st.session_state.extra_meals = []
 if "meal_water" not in st.session_state: st.session_state.meal_water = 0.0
 if "workout_session" not in st.session_state: st.session_state.workout_session = []
 if "api_results" not in st.session_state: st.session_state.api_results = []
+if "api_session" not in st.session_state:
+    st.session_state.api_session = requests.Session()
 if "target_kcal" not in st.session_state: st.session_state.target_kcal = st.session_state.ai_cfg["target_kcal"]
 if "protein_goal" not in st.session_state: st.session_state.protein_goal = st.session_state.ai_cfg["protein_goal"]
 if "water_goal" not in st.session_state: st.session_state.water_goal = st.session_state.ai_cfg.get("water_goal", 2.5)
@@ -58,26 +60,41 @@ except:
     EDAMAM_APP_ID = ""
     EDAMAM_APP_KEY = ""
 
+@st.cache_data(ttl=3600)
 def search_edamam_products(query):
-    if not EDAMAM_APP_ID or not EDAMAM_APP_KEY:
+    if not query or len(query) < 3 or not EDAMAM_APP_ID:
         return []
-    url = f"https://api.edamam.com/api/food-database/v2/parser?app_id={EDAMAM_APP_ID}&app_key={EDAMAM_APP_KEY}&ingr={query}&nutrition-type=logging"
+    
+    url = "https://api.edamam.com/api/food-database/v2/parser"
+    params = {
+        "app_id": EDAMAM_APP_ID,
+        "app_key": EDAMAM_APP_KEY,
+        "ingr": query,
+        "nutrition-type": "cooking"
+    }
+    
     try:
-        res = requests.get(url).json()
-        results = []
-        for item in res.get("hints", []):
-            food = item["food"]
-            nutrients = food.get("nutrients", {})
-            results.append({
-                "display_name": f"🌐 {food['label']} ({food.get('category', 'Food')})",
-                "full_name": food['label'],
-                "kcal": round(nutrients.get("ENERC_KCAL", 0)),
-                "p": round(nutrients.get("PROCNT", 0), 1),
-                "c": round(nutrients.get("CHOCDF", 0), 1),
-                "f": round(nutrients.get("FAT", 0), 1)
-            })
-        return results
-    except: return []
+        response = st.session_state.api_session.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            hints = response.json().get("hints", [])
+            results = []
+            for h in hints:
+                food = h.get("food", {})
+                name = food.get("label")
+                brand = food.get("brand", "Generic")
+                nutriments = food.get("nutrients", {})
+                
+                results.append({
+                    "display_name": f"🌐 {name} ({brand})",
+                    "full_name": name,
+                    "kcal": float(nutriments.get("ENERC_KCAL", 0)),
+                    "p": float(nutriments.get("PROCNT", 0)),
+                    "c": float(nutriments.get("CHOCDF", 0)),
+                    "f": float(nutriments.get("FAT", 0))
+                })
+            return results
+    except: pass
+    return []
 
 def load_products():
     try:
