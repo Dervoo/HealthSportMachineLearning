@@ -34,16 +34,18 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
+  // NOTE: Use '10.0.2.2' for Android Emulator, 'localhost' for iOS/Web/Desktop
+  static const String API_BASE = 'http://localhost:8000';
+
   Future<void> _login() async {
     setState(() => _isLoading = true);
     
-    // NOTE: Use 10.0.2.2 for Android Emulator, localhost for iOS/Web
-    final url = Uri.parse('http://localhost:8000/auth/token');
+    final url = Uri.parse('$API_BASE/auth/token');
     
     try {
+      // OAuth2PasswordRequestForm expects form-data
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'username': _usernameController.text,
           'password': _passwordController.text,

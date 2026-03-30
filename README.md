@@ -2,6 +2,43 @@
 
 Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymalizacji procesów przy użyciu zaawansowanych modeli matematycznych i ML.
 
+## 📱 System Architecture
+
+Projekt ewoluował w ekosystem **Web + Mobile + API**:
+
+1.  **Web Dashboard (Streamlit)**: Zaawansowane centrum dowodzenia z pełną analityką ML i optymalizacją diety (`dashboard.py`).
+2.  **Backend API (FastAPI)**: Produkcyjne API obsługujące autoryzację, synchronizację danych i logikę ML dla aplikacji mobilnej (`backend/main.py`).
+3.  **Mobile App (Flutter)**: Nowoczesna aplikacja na systemy iOS/Android z logowaniem i szybkim podglądem postępów (`frontend_mobile/`).
+
+---
+
+## 🚀 Uruchomienie
+
+### 1. Web Dashboard (Analityka ML)
+Wymagane biblioteki: `streamlit`, `pandas`, `scipy`, `scikit-learn`, `prophet`.
+```powershell
+python -m pip install -r requirements.txt
+python -m streamlit run dashboard.py
+```
+
+### 2. Backend API (Dla Mobile)
+Umożliwia synchronizację danych i logowanie użytkowników.
+```powershell
+# Uruchomienie serwera na porcie 8000
+python backend/main.py
+```
+
+### 3. Aplikacja Mobilna (Flutter)
+Wymaga zainstalowanego SDK Flutter.
+```powershell
+cd frontend_mobile
+flutter pub get
+# Upewnij się, że Backend API działa przed uruchomieniem aplikacji
+flutter run
+```
+
+---
+
 ## 🌟 Funkcje
 *   **AI SMART GOAL**: Automatyczne wyliczanie zapotrzebowania kcal i białka (Mifflin-St Jeor).
 *   **Diet Optimizer (LP)**: Precyzyjne dobieranie posiłków przy użyciu programowania liniowego (`scipy.optimize`).
@@ -57,11 +94,3 @@ Dzisiejsze kluczowe zmiany wprowadzone na prośbę użytkownika:
 *   <u>**Retro-Logging**</u>: Możliwość wyboru daty wpisu (dzisiaj/wczoraj/dowolna data), co pozwala na uzupełnianie danych z opóźnieniem.
 *   <u>**Advanced Hydration**</u>: Dodanie logowania ziół (liczone jako 90% wody) oraz wody z posiłków (zupy, koktajle).
 *   <u>**UI Visibility Fix**</u>: Całkowita poprawka stylów CSS – białe czcionki na ciemnych kafelkach dla maksymalnej czytelności.
-
-## 🚀 Uruchomienie
-Wymagane biblioteki: `streamlit`, `pandas`, `scipy`, `scikit-learn`, `prophet`.
-
-```bash
-py -m pip install streamlit pandas scipy scikit-learn prophet
-py -m streamlit run dashboard.py
-```
