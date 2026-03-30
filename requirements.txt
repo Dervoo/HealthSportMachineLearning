@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+pydantic[email]
+python-jose[cryptography]
+passlib[bcrypt]
+pandas
+numpy
+scikit-learn
+prophet
+scipy
+streamlit
+requests
+python-multipart

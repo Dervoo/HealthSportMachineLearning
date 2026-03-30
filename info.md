@@ -8,6 +8,15 @@ w pull requestach dodawaj review - dodawaj w sposob bardziej ludzki jako ja zeby
 
 wykonuj sprzatanie i przełązcaj sie na mastera.
 
+dodawaj modele wprowadzane z krótkim opiskiem/wyjaśnieniem do readme po ich wprowadzeniu
+
+nie psuj innych featersow
+
+w kazdym PR poprosze o code review w moim imieniu na githubie wszystkich commitow i kodu, co wazniejszych fragmentów, dokładne i dobre code review, najlepiej rozbijaj
+jeden fragment kodu na jedno add a comment w moim imieniu, podkresl kod a potem zrob review i kolejny istotny fragment (czyli jeden komentarz dla jednej rzeczy)
+
+sam merguje pull requesty
+
 COMMUNICATION RULES
 
 Direct Start: Nie pisz "Oczywiście!", "Chętnie pomogę" ani "Oto Twoje rozwiązanie". Przejdź od razu do meritum.
