@@ -6,8 +6,8 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 from typing import Optional, List
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 import bcrypt
+import hashlib
 import sys
 import os
 import shutil
@@ -38,7 +38,6 @@ MY_WORKOUTS = {
     "Dzień Wolny": ["Rest Day"]
 }
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 app = FastAPI(title="Health-ML API", description="Produkcyjne API dla Web i Mobile")
@@ -47,6 +46,44 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 db = DBManager(db_path="../health_vault.db")
 ml = MLEngine(csv_path="../progress_me.csv", products_path="../data/products.json")
+
+# --- AUTH UTILS (PANCERNE) ---
+def verify_password(plain_password, hashed_password):
+    try:
+        # 1. Sprawdź czy to BCrypt (nowy format)
+        if hashed_password.startswith('$2b$') or hashed_password.startswith('$2a$'):
+            return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+        
+        # 2. Sprawdź czy to stary format PBKDF2 (passlib default)
+        # UWAGA: Jeśli masz stare dane, których nie możesz stracić, 
+        # najlepiej je po prostu zresetować skryptem fix_db.py.
+        # Ale dla bezpieczeństwa, jeśli hasło nie jest bcryptem, to po prostu go nie wpuścimy 
+        # zamiast wywalać serwer błędem 500.
+        return False
+    except Exception as e:
+        print(f"Auth Error: {e}")
+        return False
+
+def get_password_hash(password):
+    # Bcrypt ma limit 72 znaków, więc dla bezpieczeństwa robimy sha256 przed hashowaniem
+    # (to standardowa praktyka, która pozwala na nieskończenie długie hasła)
+    pwd_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+    return bcrypt.hashpw(pwd_hash.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        user = db.get_user_by_email(email)
+        if user is None: raise HTTPException(status_code=401)
+        return user
+    except: raise HTTPException(status_code=401)
 
 # --- MODELS ---
 class UserRegister(BaseModel):
@@ -98,42 +135,38 @@ class UpdateGoals(BaseModel):
     target_protein: float
     water_goal: float
 
-# --- AUTH ---
-def verify_password(plain, hashed):
-    try: return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
-    except: return False
-
-def get_password_hash(pw):
-    return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        user = db.get_user_by_email(email)
-        if user is None: raise HTTPException(status_code=401)
-        return user
-    except: raise HTTPException(status_code=401)
-
 # --- ENDPOINTS ---
 @app.post("/auth/register", response_model=UserResponse)
 def register(user: UserRegister):
+    if db.get_user_by_email(user.email):
+        raise HTTPException(status_code=400, detail="Użytkownik o tym emailu już istnieje")
+    
     hashed_pw = get_password_hash(user.password)
     smart = ml.calculate_smart_goal(user.weight, user.height, user.age, user.gender, user.activity, user.goal)
     user_id = db.add_user(user.name, user.age, user.height, user.gender, user.activity, user.goal, smart["target_kcal"], smart["target_p"], smart["water"], email=user.email, password=hashed_pw)
+    
+    if not user_id:
+        raise HTTPException(status_code=500, detail="Błąd zapisu w bazie danych")
+        
     return {**user.dict(), "id": user_id, "target_kcal": smart["target_kcal"], "target_protein": smart["target_p"], "water_goal": smart["water"]}
 
 @app.post("/auth/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = db.get_user_by_email(form_data.username)
-    if not user or not verify_password(form_data.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Błędne dane")
+    
+    # Próbujemy zweryfikować hasło. SHA256 weryfikacja dla nowych haseł:
+    pwd_hash = hashlib.sha256(form_data.password.encode('utf-8')).hexdigest()
+    
+    if not user or not bcrypt.checkpw(pwd_hash.encode('utf-8'), user["password"].encode('utf-8')):
+        # Jeśli to nie zadziałało, sprawdzamy czy to stare hasło bez SHA256 (dla kont założonych 5 min temu)
+        try:
+            if user and bcrypt.checkpw(form_data.password.encode('utf-8'), user["password"].encode('utf-8')):
+                pass # OK
+            else:
+                raise HTTPException(status_code=401, detail="Błędne dane logowania")
+        except:
+             raise HTTPException(status_code=401, detail="Błędne dane logowania")
+             
     return {"access_token": create_access_token(data={"sub": user["email"]}), "token_type": "bearer"}
 
 @app.get("/users/me", response_model=UserResponse)
@@ -150,7 +183,6 @@ def get_exercises(): return MY_WORKOUTS
 
 @app.get("/edamam/search")
 def search_food(q: str):
-    # Naprawiony endpoint z lepszą obsługą błędów i timeoutem
     url = f"https://api.edamam.com/api/food-database/v2/parser"
     params = {"app_id": EDAMAM_APP_ID, "app_key": EDAMAM_APP_KEY, "ingr": q, "nutrition-type": "logging"}
     try:
@@ -172,18 +204,15 @@ def search_food(q: str):
         print(f"Edamam Error: {e}")
         return []
 
-# --- MEAL MANAGEMENT ---
 @app.post("/meals/")
 async def add_meal(meal: MealEntry, current_user: dict = Depends(get_current_user)):
     db.add_meal_entry(current_user["id"], meal.date, meal.name, meal.kcal, meal.protein, meal.carbs, meal.fats)
-    # Automatycznie aktualizujemy sumaryczny progress dnia
     df_meals = db.get_daily_meals(current_user["id"], meal.date)
     total_kcal = df_meals['kcal'].sum()
     total_p = df_meals['protein'].sum()
     total_c = df_meals['carbs'].sum()
     total_f = df_meals['fats'].sum()
     
-    # Pobieramy obecną wagę/wodę żeby ich nie wyzerować
     df_prog = db.get_user_progress(current_user["id"])
     today_prog = df_prog[df_prog['date'] == meal.date]
     weight = today_prog['weight'].iloc[0] if not today_prog.empty else 80.0
@@ -199,12 +228,9 @@ async def get_meals(date: str, current_user: dict = Depends(get_current_user)):
 
 @app.delete("/meals/{meal_id}")
 async def delete_meal(meal_id: int, current_user: dict = Depends(get_current_user)):
-    # Pobieramy datę posiłku przed usunięciem żeby przeliczyć sumę dnia
-    # Dla uproszczenia w tym projekcie używamy dzisiejszej daty lub przeliczamy całość
     db.delete_meal_entry(meal_id, current_user["id"])
     return {"status": "success"}
 
-# --- ML & PROGRESS ---
 @app.get("/ml/diet-plan")
 async def get_diet_plan(current_user: dict = Depends(get_current_user)):
     df_prog = db.get_user_progress(current_user["id"])
