@@ -50,7 +50,7 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(32), child: Column(children: [
       const Icon(Icons.bolt, size: 80, color: Colors.tealAccent), const Text('Health-ML', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)), const SizedBox(height: 48),
       TextField(controller: _e, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder())), const SizedBox(height: 16),
-      TextField(controller: _p, decoration: const InputDecoration(labelText: 'Hasło', border: OutlineInputBorder()), obscureText: true), const SizedBox(height: 32),
+      TextField(controller: _p, decoration: const InputDecoration(labelText: 'Hasło', border: OutlineInputBorder()), obscureText: true, onSubmitted: (_) => _login()), const SizedBox(height: 32),
       _l ? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _login, child: const Text('Zaloguj się'))),
       TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterPage())), child: const Text('Zarejestruj się'))
     ]))));
@@ -268,19 +268,41 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
   }
   void _add(Map f) {
     final qty = TextEditingController(text: "100");
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: Text(f['label']), content: TextField(controller: qty, decoration: const InputDecoration(labelText: 'Ilość (g)'), keyboardType: TextInputType.number),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Anuluj')), ElevatedButton(onPressed: () async {
-        double factor = (double.tryParse(qty.text) ?? 100) / 100;
-        await http.post(Uri.parse('$_apiBase/meals/'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ${widget.token}'},
-          body: jsonEncode({"date": DateFormat('yyyy-MM-dd').format(DateTime.now()), "name": f['label'], "kcal": f['kcal']*factor, "protein": f['p']*factor, "carbs": f['c']*factor, "fats": f['f']*factor}));
-        Navigator.pop(ctx); Navigator.pop(context);
-      }, child: const Text('Dodaj'))],
-    ));
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setST) {
+      double factor = (double.tryParse(qty.text) ?? 0) / 100;
+      return AlertDialog(
+        title: Text(f['label']), 
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: qty, 
+            decoration: const InputDecoration(labelText: 'Ilość (g)'), 
+            keyboardType: TextInputType.number,
+            onChanged: (v) => setST(() {}),
+          ),
+          const SizedBox(height: 16),
+          if (factor > 0) Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _mLabel('Kcal', (f['kcal'] * factor).round().toString()),
+            _mLabel('B', (f['p'] * factor).toStringAsFixed(1)),
+            _mLabel('W', (f['c'] * factor).toStringAsFixed(1)),
+            _mLabel('T', (f['f'] * factor).toStringAsFixed(1)),
+          ]),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Anuluj')),
+          ElevatedButton(onPressed: () async {
+            double factor = (double.tryParse(qty.text) ?? 100) / 100;
+            await http.post(Uri.parse('$_apiBase/meals/'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ${widget.token}'},
+              body: jsonEncode({"date": DateFormat('yyyy-MM-dd').format(DateTime.now()), "name": f['label'], "kcal": f['kcal']*factor, "protein": f['p']*factor, "carbs": f['c']*factor, "fats": f['f']*factor}));
+            Navigator.pop(ctx); Navigator.pop(context);
+          }, child: const Text('Dodaj'))
+        ],
+      );
+    }));
   }
+  Widget _mLabel(String l, String v) => Column(children: [Text(l, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(v, style: const TextStyle(fontWeight: FontWeight.bold))]);
   @override Widget build(BuildContext context) {
     return Scaffold(appBar: AppBar(title: const Text('Edamam API')), body: Column(children: [
-      Padding(padding: const EdgeInsets.all(16), child: TextField(controller: _q, decoration: InputDecoration(hintText: "Szukaj...", suffixIcon: IconButton(onPressed: _search, icon: const Icon(Icons.search))))),
+      Padding(padding: const EdgeInsets.all(16), child: TextField(controller: _q, decoration: InputDecoration(hintText: "Szukaj...", suffixIcon: IconButton(onPressed: _search, icon: const Icon(Icons.search))), onSubmitted: (_) => _search())),
       if (_loading) const LinearProgressIndicator(),
       Expanded(child: ListView.builder(itemCount: _res.length, itemBuilder: (c, i) => ListTile(title: Text(_res[i]['label']), subtitle: Text('${_res[i]['kcal']} kcal/100g'), trailing: const Icon(Icons.add), onTap: () => _add(_res[i]))))
     ]));

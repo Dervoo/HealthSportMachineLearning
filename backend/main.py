@@ -228,7 +228,28 @@ async def get_meals(date: str, current_user: dict = Depends(get_current_user)):
 
 @app.delete("/meals/{meal_id}")
 async def delete_meal(meal_id: int, current_user: dict = Depends(get_current_user)):
+    # Pobieramy datę posiłku przed usunięciem, żeby wiedzieć co przeliczyć
+    with db._get_connection() as conn:
+        res = conn.execute("SELECT date FROM meal_entries WHERE id = ? AND user_id = ?", (meal_id, current_user["id"])).fetchone()
+        if not res: raise HTTPException(status_code=404, detail="Meal not found")
+        meal_date = res[0]
+
     db.delete_meal_entry(meal_id, current_user["id"])
+    
+    # Przeliczamy sumę dnia po usunięciu
+    df_meals = db.get_daily_meals(current_user["id"], meal_date)
+    total_kcal = df_meals['kcal'].sum()
+    total_p = df_meals['protein'].sum()
+    total_c = df_meals['carbs'].sum()
+    total_f = df_meals['fats'].sum()
+    
+    # Aktualizujemy wpis w tabeli progress
+    df_prog = db.get_user_progress(current_user["id"])
+    today_prog = df_prog[df_prog['date'] == meal_date]
+    weight = today_prog['weight'].iloc[0] if not today_prog.empty else 80.0
+    water = today_prog['water'].iloc[0] if not today_prog.empty else 0.0
+    
+    db.add_or_update_progress(current_user["id"], meal_date, weight, water, int(total_kcal), total_p, total_c, total_f, "Updated after delete", 7, 3)
     return {"status": "success"}
 
 @app.get("/ml/diet-plan")

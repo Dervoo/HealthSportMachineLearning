@@ -65,7 +65,8 @@ flutter pub get
 # Upewnij się, że Backend API działa przed uruchomieniem aplikacji
 flutter run
 ```
-
+abc@gmail.com
+123
 ---
 
 ## 🌟 Funkcje
