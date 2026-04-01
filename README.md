@@ -2,6 +2,18 @@
 
 Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymalizacji procesów przy użyciu zaawansowanych modeli matematycznych i ML.
 
+## ⚡ Szybki Start (Windows)
+
+Jeśli chcesz uruchomić cały system (Backend + Frontend) jednym kliknięciem (np. po restarcie komputera):
+
+1. Otwórz główny folder projektu.
+2. Kliknij dwukrotnie plik **`start_health_ml.bat`**.
+3. Skrypt automatycznie sprawdzi środowisko, doinstaluje brakujące biblioteki i uruchomi usługi:
+   - **Backend API**: http://localhost:8000
+   - **Web Dashboard**: http://localhost:8501
+
+---
+
 ## 📱 System Architecture
 
 Projekt ewoluował w ekosystem **Web + Mobile + API**:
@@ -77,6 +89,15 @@ Jak wybierać trudność treningu?
 *   **8**: Ciężko, 2 powtórzenia w zapasie (RIR 2).
 *   **7**: Solidny trening, kontrolowany ciężar, 3-4 powtórzenia w zapasie.
 *   **1-5**: Rozgrzewka, cardio o niskiej intensywności lub regeneracja.
+
+---
+
+## 🛠️ Rozwiązywanie problemów (Troubleshooting)
+
+### Problem z logowaniem (Błąd logowania / Bcrypt)
+Jeśli napotkasz błędy logowania mimo poprawnych danych, może to wynikać z konfliktu biblioteki `passlib` z nowszymi wersjami Pythona (3.12+).
+*   **Rozwiązanie:** Backend został zaktualizowany, aby używać bezpośrednio biblioteki `bcrypt`.
+*   **Ręczna naprawa bazy:** Jeśli hasła w bazie są uszkodzone, użyj skryptu `fix_db.py`, aby zresetować hasło dla `admin@test.pl`.
 
 ---
 
