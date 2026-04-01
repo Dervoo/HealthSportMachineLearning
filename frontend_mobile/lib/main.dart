@@ -154,21 +154,7 @@ class HomeTab extends StatelessWidget {
                 ])),
                 IconButton(
                   icon: const Icon(Icons.add_circle_outline, color: Colors.cyanAccent),
-                  onPressed: () async {
-                    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-                    await http.post(Uri.parse('$_apiBase/progress/'), 
-                      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'}, 
-                      body: jsonEncode({
-                        "date": today, 
-                        "weight": prog['weight'] ?? 80.0, 
-                        "water": waterVal + 0.25, 
-                        "kcal": prog['kcal'] ?? 0, 
-                        "protein": prog['protein'] ?? 0.0, 
-                        "carbs": prog['carbs'] ?? 0.0, 
-                        "fats": prog['fats'] ?? 0.0
-                      }));
-                    onRefresh();
-                  },
+                  onPressed: () => _showWaterSlider(context, waterVal),
                 )
               ]),
             ),
@@ -187,6 +173,30 @@ class HomeTab extends StatelessWidget {
       ),
     );
   }
+
+  void _showWaterSlider(BuildContext context, double current) {
+    double val = 0.25;
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setST) => AlertDialog(
+      title: const Text('Dodaj wodę'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('${val.toStringAsFixed(2)} L', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+        Slider(value: val, min: 0.1, max: 1.5, divisions: 14, label: '${val.toStringAsFixed(2)} L', onChanged: (v) => setST(() => val = v)),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Anuluj')),
+        ElevatedButton(onPressed: () async {
+          final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+          await http.post(Uri.parse('$_apiBase/progress/'), 
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'}, 
+            body: jsonEncode({
+              "date": today, "weight": prog['weight'] ?? 80.0, "water": current + val, 
+              "kcal": prog['kcal'] ?? 0, "protein": prog['protein'] ?? 0.0, "carbs": prog['carbs'] ?? 0.0, "fats": prog['fats'] ?? 0.0
+            }));
+          onRefresh(); Navigator.pop(ctx);
+        }, child: const Text('Dodaj'))
+      ],
+    )));
+  }
   Widget _mini(String l, String v, Color c) => Column(children: [Text(l, style: TextStyle(color: c, fontWeight: FontWeight.bold)), Text(v)]);
 }
 
@@ -197,10 +207,35 @@ class LogTab extends StatelessWidget {
   @override Widget build(BuildContext context) {
     return ListView(padding: const EdgeInsets.all(16), children: [
       _btn(context, 'SZUKAJ JEDZENIA (API)', Icons.search, Colors.greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => FoodSearchPage(token: token))).then((_) => onUpdate())),
+      _btn(context, 'DODAJ RĘCZNIE', Icons.edit_note, Colors.orangeAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ManualMealPage(token: token))).then((_) => onUpdate())),
       _btn(context, 'LOGUJ TRENING', Icons.fitness_center, Colors.redAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutSelectPage(token: token, prog: prog))).then((_) => onUpdate())),
     ]);
   }
   Widget _btn(BuildContext context, String t, IconData i, Color c, VoidCallback o) => Card(child: ListTile(leading: Icon(i, color: c), title: Text(t), onTap: o));
+}
+
+// --- MANUAL MEAL ---
+class ManualMealPage extends StatefulWidget {
+  final String token; const ManualMealPage({super.key, required this.token});
+  @override State<ManualMealPage> createState() => _ManualMealPageState();
+}
+class _ManualMealPageState extends State<ManualMealPage> {
+  final _n = TextEditingController(), _k = TextEditingController(), _p = TextEditingController(), _c = TextEditingController(), _f = TextEditingController();
+  @override Widget build(BuildContext context) {
+    return Scaffold(appBar: AppBar(title: const Text('Ręczny wpis')), body: ListView(padding: const EdgeInsets.all(24), children: [
+      TextField(controller: _n, decoration: const InputDecoration(labelText: 'Nazwa posiłku')),
+      TextField(controller: _k, decoration: const InputDecoration(labelText: 'Kcal'), keyboardType: TextInputType.number),
+      TextField(controller: _p, decoration: const InputDecoration(labelText: 'Białko (g)'), keyboardType: TextInputType.number),
+      TextField(controller: _c, decoration: const InputDecoration(labelText: 'Węglowodany (g)'), keyboardType: TextInputType.number),
+      TextField(controller: _f, decoration: const InputDecoration(labelText: 'Tłuszcz (g)'), keyboardType: TextInputType.number),
+      const SizedBox(height: 32),
+      ElevatedButton(onPressed: () async {
+        await http.post(Uri.parse('$_apiBase/meals/'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ${widget.token}'},
+          body: jsonEncode({"date": DateFormat('yyyy-MM-dd').format(DateTime.now()), "name": _n.text, "kcal": double.parse(_k.text), "protein": double.parse(_p.text), "carbs": double.parse(_c.text), "fats": double.parse(_f.text)}));
+        Navigator.pop(context);
+      }, child: const Text('Zapisz posiłek'))
+    ]));
+  }
 }
 
 // --- FOOD SEARCH ---
