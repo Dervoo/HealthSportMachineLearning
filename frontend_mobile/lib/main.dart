@@ -175,25 +175,32 @@ class HomeTab extends StatelessWidget {
   }
 
   void _showWaterSlider(BuildContext context, double current) {
-    double val = 0.25;
+    double val = 0.25; bool addMode = true;
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setST) => AlertDialog(
-      title: const Text('Dodaj wodę'),
+      title: const Text('Zmień nawodnienie'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('${val.toStringAsFixed(2)} L', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          ChoiceChip(label: const Text('DODAJ'), selected: addMode, onSelected: (v) => setST(() => addMode = true), selectedColor: Colors.cyanAccent.withOpacity(0.3)),
+          const SizedBox(width: 8),
+          ChoiceChip(label: const Text('ODEJMIJ'), selected: !addMode, onSelected: (v) => setST(() => addMode = false), selectedColor: Colors.redAccent.withOpacity(0.3)),
+        ]),
+        const SizedBox(height: 24),
+        Text('${addMode ? "+" : "-"}${val.toStringAsFixed(2)} L', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: addMode ? Colors.cyanAccent : Colors.redAccent)),
         Slider(value: val, min: 0.1, max: 1.5, divisions: 14, label: '${val.toStringAsFixed(2)} L', onChanged: (v) => setST(() => val = v)),
       ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Anuluj')),
         ElevatedButton(onPressed: () async {
           final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+          double diff = addMode ? val : -val;
           await http.post(Uri.parse('$_apiBase/progress/'), 
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'}, 
             body: jsonEncode({
-              "date": today, "weight": prog['weight'] ?? 80.0, "water": current + val, 
+              "date": today, "weight": prog['weight'] ?? 80.0, "water": (current + diff).clamp(0, 10), 
               "kcal": prog['kcal'] ?? 0, "protein": prog['protein'] ?? 0.0, "carbs": prog['carbs'] ?? 0.0, "fats": prog['fats'] ?? 0.0
             }));
           onRefresh(); Navigator.pop(ctx);
-        }, child: const Text('Dodaj'))
+        }, child: Text(addMode ? 'Dodaj' : 'Odejmij'))
       ],
     )));
   }

@@ -4,13 +4,24 @@ Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymaliz
 
 ## ⚡ Szybki Start (Windows)
 
-Jeśli chcesz uruchomić cały system (Backend + Frontend) jednym kliknięciem (np. po restarcie komputera):
+Jeśli chcesz uruchomić cały system (Backend + Frontend) jednym kliknięciem:
 
-1. Otwórz główny folder projektu.
-2. Kliknij dwukrotnie plik **`start_health_ml.bat`**.
-3. Skrypt automatycznie sprawdzi środowisko, doinstaluje brakujące biblioteki i uruchomi usługi:
-   - **Backend API**: http://localhost:8000
-   - **Web Dashboard**: http://localhost:8501
+1.  Otwórz główny folder projektu.
+2.  Kliknij dwukrotnie plik **`start_health_ml.bat`**.
+3.  Skrypt automatycznie:
+    *   Sprawdzi i doinstaluje brakujące biblioteki Python.
+    *   Uruchomi **Backend API** (port 8000) z funkcją *auto-reload* (zmiany w kodzie wchodzą od razu).
+    *   Uruchomi **Web Dashboard** (port 8501).
+    *   **Automatycznie wykryje urządzenia Flutter**: Jeśli masz włączony emulator Androida, skrypt zapyta, czy go uruchomić. Jeśli nie znajdzie emulatora, zaproponuje wersję Windows Desktop.
+
+---
+
+## 📱 Mobile App (Flutter)
+Aplikacja mobilna jest teraz w pełni zintegrowana z API.
+*   **Logowanie**: Używa bezpiecznego hashowania SHA256 + BCrypt.
+*   **Woda**: Interaktywny suwak z możliwością dodawania i odejmowania (korekta błędów).
+*   **Edamam API**: Wyszukiwanie produktów działa bezpośrednio z poziomu aplikacji.
+*   **Tryb offline**: Najważniejsze dane są utrwalane w lokalnej bazie SQLite (`health_vault.db`).
 
 ---
 

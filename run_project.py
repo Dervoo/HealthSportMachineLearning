@@ -22,11 +22,12 @@ if __name__ == "__main__":
         python_exe = "py"
 
     # 1. Backend API (FastAPI)
-    # Dodajemy PYTHONPATH aby uniknąć błędów z modułem 'core'
+    # Dodajemy PYTHONPATH oraz flagę --reload dla automatycznego odświeżania po zmianach w kodzie
     env = os.environ.copy()
     env["PYTHONPATH"] = os.path.join(root_dir, "core")
     
-    backend_cmd = f'"{python_exe}" -m uvicorn backend.main:app --host 0.0.0.0 --port 8000'
+    # Dodanie --reload pozwala na edycję kodu bez restartu .bat
+    backend_cmd = f'"{python_exe}" -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload'
     backend = subprocess.Popen(backend_cmd, shell=True, env=env)
 
     # 2. Frontend Web (Streamlit)
