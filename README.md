@@ -82,7 +82,13 @@ flutter run
 System wykorzystuje wzór **Mifflin-St Jeor** oraz współczynnik **PAL**.
 *   **Nowość ML:** System automatycznie wylicza cel nawodnienia: $\text{waga} \times 0.033 + \text{bonus aktywności}$.
 
-### 2. Optymalizacja Diety (Linear Programming)
+### 2. Model Autoryzacji (BCrypt + SHA256 Hybrid)
+W celu obejścia limitu 72 znaków w algorytmie BCrypt oraz zapewnienia maksymalnego bezpieczeństwa, system stosuje hybrydowe hashowanie:
+1.  **SHA256**: Hasło wejściowe jest najpierw procesowane przez funkcję skrótu SHA256.
+2.  **BCrypt**: Wynik SHA256 jest następnie hashowany przy użyciu BCrypt z dynamicznym soleniem.
+*   **Zaleta**: Pozwala na używanie haseł o dowolnej długości bez utraty entropii i zapewnia odporność na ataki typu rainbow tables.
+
+### 3. Optymalizacja Diety (Linear Programming)
 Wykorzystuje solver `highs` z biblioteki `scipy.optimize.linprog` do minimalizacji nadmiaru kcal przy zachowaniu minimum białkowego.
 
 ### 3. Prognozowanie Trendu i Plateau (Facebook Prophet)
