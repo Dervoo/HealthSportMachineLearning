@@ -7,7 +7,12 @@ Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymaliz
 Jeśli chcesz uruchomić cały system (Backend + Frontend) jednym kliknięciem:
 
 1.  Otwórz główny folder projektu.
-2.  Kliknij dwukrotnie plik **`start_health_ml.bat`**.
+2.  Uruchom system:
+    *   **Metoda 1 (Klikana)**: Kliknij dwukrotnie plik **`start_health_ml.bat`**.
+    *   **Metoda 2 (Terminal)**: Wpisz w PowerShell/CMD:
+        ```powershell
+        py run_project.py
+        ```
 3.  Skrypt automatycznie:
     *   Sprawdzi i doinstaluje brakujące biblioteki Python.
     *   Uruchomi **Backend API** (port 8000) z funkcją *auto-reload* (zmiany w kodzie wchodzą od razu).
