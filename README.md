@@ -22,7 +22,8 @@ Jeśli chcesz uruchomić cały system (Backend + Frontend) jednym kliknięciem:
 ---
 
 ## 📱 Mobile App (Flutter)
-Aplikacja mobilna jest teraz w pełni zintegrowana z API.
+Aplikacja mobilna jest teraz w pełni zintegrowana z API i Firebase.
+*   **Wydawanie wersji**: Zobacz [instrukcję MOBILE_RELEASE.md](MOBILE_RELEASE.md), aby dowiedzieć się, jak zainstalować aplikację na telefonie.
 *   **Logowanie**: Używa bezpiecznego hashowania SHA256 + BCrypt.
 *   **Woda**: Interaktywny suwak z możliwością dodawania i odejmowania (korekta błędów).
 *   **Edamam API**: Wyszukiwanie produktów działa bezpośrednio z poziomu aplikacji.

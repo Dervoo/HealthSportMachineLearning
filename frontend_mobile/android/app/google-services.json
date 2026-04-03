@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "450035263910",
+    "project_id": "health-ml-app",
+    "storage_bucket": "health-ml-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:450035263910:android:eb5cf1a8debbc929a60767",
+        "android_client_info": {
+          "package_name": "com.example.frontend_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhbwSl0dGx_x3u3OCm0ztHMFNn1DdLz5Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
