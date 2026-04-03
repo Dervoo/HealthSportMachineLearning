@@ -12,6 +12,7 @@ import sys
 import os
 import shutil
 import requests
+import pandas as pd
 
 # Dodajemy folder core do ścieżki
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
@@ -44,8 +45,14 @@ app = FastAPI(title="Health-ML API", description="Produkcyjne API dla Web i Mobi
 app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-db = DBManager(db_path="../health_vault.db")
-ml = MLEngine(csv_path="../progress_me.csv", products_path="../data/products.json")
+# Używamy ścieżki absolutnej do bazy danych, aby uniknąć problemów z katalogiem roboczym
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, "health_vault.db")
+PRODUCTS_PATH = os.path.join(BASE_DIR, "data", "products.json")
+CSV_PATH = os.path.join(BASE_DIR, "progress_me.csv")
+
+db = DBManager(db_path=DB_PATH)
+ml = MLEngine(csv_path=CSV_PATH, products_path=PRODUCTS_PATH)
 
 # --- AUTH UTILS (PANCERNE) ---
 def verify_password(plain_password, hashed_password):
@@ -157,18 +164,27 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     # Próbujemy zweryfikować hasło. SHA256 weryfikacja dla nowych haseł:
     pwd_hash = hashlib.sha256(form_data.password.encode('utf-8')).hexdigest()
     
-    if not user or not bcrypt.checkpw(pwd_hash.encode('utf-8'), user["password"].encode('utf-8')):
-        # Jeśli to nie zadziałało, sprawdzamy czy to stare hasło bez SHA256 (dla kont założonych 5 min temu)
-        try:
-            if user and bcrypt.checkpw(form_data.password.encode('utf-8'), user["password"].encode('utf-8')):
-                pass # OK
-            else:
-                raise HTTPException(status_code=401, detail="Błędne dane logowania")
-        except:
-             raise HTTPException(status_code=401, detail="Błędne dane logowania")
-             
-    return {"access_token": create_access_token(data={"sub": user["email"]}), "token_type": "bearer"}
+    # Pobierz dzisiejszy trening, aby dostosować cele w locie
+    today = datetime.now().strftime("%Y-%m-%d")
+    progress = db.get_user_progress(user["id"])
+    today_progress = progress[progress['date'] == today]
+    training_log = today_progress['training_log'].iloc[0] if not today_progress.empty else None
 
+    smart = ml.calculate_smart_goal(user["weight"] if "weight" in user else 80.0, user["height"], user["age"], user["gender"], user["activity_level"], user["goal"], training_log=training_log)
+
+    return {
+        "access_token": create_access_token(data={"sub": user["email"]}), 
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "goal": user["goal"],
+            "target_kcal": smart["target_kcal"], 
+            "target_protein": smart["target_p"], 
+            "water_goal": smart["water"]
+        }
+    }
 @app.get("/users/me", response_model=UserResponse)
 async def read_users_me(current_user: dict = Depends(get_current_user)):
     return current_user
@@ -272,13 +288,32 @@ async def add_progress(log: ProgressLog, current_user: dict = Depends(get_curren
 @app.get("/progress/")
 async def get_progress(current_user: dict = Depends(get_current_user)):
     df = db.get_user_progress(current_user["id"])
+    if not df.empty and 'date' in df.columns:
+        # Konwersja na string YYYY-MM-DD aby uniknąć problemów z JSONem
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
     return df.to_dict(orient="records")
 
 @app.get("/ml/insights")
 async def get_ml_insights(current_user: dict = Depends(get_current_user)):
-    df_progress = db.get_user_progress(current_user["id"])
-    ml.set_data(df_progress)
-    return {"trend": ml.predict_weight_trend(), "plateau": ml.predict_plateau_prophet(), "training": ml.analyze_training_insights(), "recommendation": ml.recommend_daily_activity(last_sleep=df_progress['sleep_quality'].iloc[-1] if not df_progress.empty else None)}
+    user_id = current_user["id"]
+    df_progress = db.get_user_progress(user_id)
+    
+    # Tworzymy nową instancję MLEngine dla każdego zapytania
+    engine = MLEngine(csv_path="../progress_me.csv", products_path="../data/products.json")
+    
+    if not df_progress.empty:
+        # Upewniamy się, że daty są w formacie datetime dla silnika ML
+        df_progress['date'] = pd.to_datetime(df_progress['date'])
+        engine.set_data(df_progress)
+    
+    print(f"DEBUG: Insights for {current_user['email']}. Entries: {len(df_progress)}")
+    
+    return {
+        "trend": engine.predict_weight_trend(), 
+        "plateau": engine.predict_plateau_prophet(), 
+        "training": engine.analyze_training_insights(), 
+        "recommendation": engine.recommend_daily_activity(last_sleep=df_progress['sleep_quality'].iloc[-1] if not df_progress.empty else None)
+    }
 
 @app.post("/upload-photo/")
 async def upload_photo(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
