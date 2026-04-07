@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <img src="image-6.png" width="30%" alt="Diet Optimization">
+  <img src="image-6.png" width="80%" alt="Diet Optimization">
 </p>
 
 ---
