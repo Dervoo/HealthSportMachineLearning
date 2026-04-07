@@ -737,7 +737,9 @@ class WorkoutSelectPage extends StatefulWidget {
 class _WorkoutSelectPageState extends State<WorkoutSelectPage> {
   Map _exs = {};
   String? _day, _ex;
-  final _s = TextEditingController(text: "3"), _r = TextEditingController(text: "10");
+  final _s = TextEditingController(text: "3"), 
+        _r = TextEditingController(text: "10"),
+        _w = TextEditingController(text: "0");
   @override
   void initState() {
     super.initState();
@@ -776,19 +778,32 @@ class _WorkoutSelectPageState extends State<WorkoutSelectPage> {
                             value: e.toString(), child: Text(e.toString())))
                         .toList(),
                     onChanged: (v) => setState(() => _ex = v)),
+              const SizedBox(height: 16),
               Row(children: [
                 Expanded(
                     child: TextField(
-                        controller: _s, decoration: const InputDecoration(labelText: 'Serie'))),
+                        controller: _s, 
+                        decoration: const InputDecoration(labelText: 'Serie'),
+                        keyboardType: TextInputType.number)),
+                const SizedBox(width: 16),
+                Expanded(
+                    child: TextField(
+                        controller: _w, 
+                        decoration: const InputDecoration(labelText: 'Waga (kg)'),
+                        keyboardType: TextInputType.number)),
                 const SizedBox(width: 16),
                 Expanded(
                     child: TextField(
                         controller: _r,
-                        decoration: const InputDecoration(labelText: 'Powtórzenia')))
+                        decoration: const InputDecoration(labelText: 'Reps'),
+                        keyboardType: TextInputType.number))
               ]),
               const Spacer(),
               ElevatedButton(
                   onPressed: () async {
+                    // Format oczekiwany przez ML: Nazwa (SxWkg x R)
+                    final logEntry = "$_ex (${_s.text}x${_w.text}kg x ${_r.text})";
+                    
                     await http.post(Uri.parse('$_apiBase/progress/'),
                         headers: {
                           'Content-Type': 'application/json',
@@ -802,9 +817,9 @@ class _WorkoutSelectPageState extends State<WorkoutSelectPage> {
                           "protein": (widget.prog['protein'] as num? ?? 0.0).toDouble(),
                           "carbs": (widget.prog['carbs'] as num? ?? 0.0).toDouble(),
                           "fats": (widget.prog['fats'] as num? ?? 0.0).toDouble(),
-                          "training_log": "$_ex (${_s.text}x${_r.text})",
-                          "sleep_quality": 3,
-                          "rpe": 7
+                          "training_log": logEntry,
+                          "sleep_quality": widget.prog['sleep_quality'] ?? 3,
+                          "rpe": widget.prog['rpe'] ?? 7
                         }));
                     Navigator.pop(context);
                   },
@@ -864,6 +879,29 @@ class _AITabState extends State<AITab> {
     return RefreshIndicator(
         onRefresh: _fetch,
         child: ListView(padding: const EdgeInsets.all(24), children: [
+          if (_ins!['smart_goal'] != null)
+            Card(
+                color: Colors.tealAccent.withOpacity(0.1),
+                margin: const EdgeInsets.only(bottom: 24),
+                child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(children: [
+                      const Text('POLECANE NA DZIŚ (AI)',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+                      const SizedBox(height: 12),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                        _goalMetric('Kalorie', '${_ins!['smart_goal']['target_kcal']}', 'kcal'),
+                        _goalMetric('Białko', '${_ins!['smart_goal']['target_p']}', 'g'),
+                        _goalMetric('Woda', '${_ins!['smart_goal']['water']}', 'L'),
+                      ]),
+                      if (_ins!['recommendation'] != null) ...[
+                        const Divider(height: 32),
+                        Text(_ins!['recommendation']['msg'] ?? "",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 13))
+                      ]
+                    ]))),
           const Text('Trend Wagi', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           SizedBox(
@@ -883,6 +921,12 @@ class _AITabState extends State<AITab> {
           _aiCard(Icons.fitness_center, 'Postępy Treningowe', _ins!['training']['trend'] ?? "Brak treningów")
         ]));
   }
+
+  Widget _goalMetric(String l, String v, String u) => Column(children: [
+        Text(l, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(v, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(u, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+      ]);
 
   Widget _aiCard(IconData i, String t, String s) => Card(
       margin: const EdgeInsets.only(bottom: 12),

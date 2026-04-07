@@ -299,12 +299,37 @@ async def get_ml_insights(current_user: dict = Depends(get_current_user)):
     df_progress = db.get_user_progress(user_id)
     
     # Tworzymy nową instancję MLEngine dla każdego zapytania
-    engine = MLEngine(csv_path="../progress_me.csv", products_path="../data/products.json")
+    engine = MLEngine(csv_path=CSV_PATH, products_path=PRODUCTS_PATH)
+    
+    current_weight = 80.0
+    training_log = None
+    last_sleep = None
     
     if not df_progress.empty:
         # Upewniamy się, że daty są w formacie datetime dla silnika ML
         df_progress['date'] = pd.to_datetime(df_progress['date'])
         engine.set_data(df_progress)
+        
+        # Pobierz najnowszą wagę
+        current_weight = df_progress['weight'].iloc[-1]
+        last_sleep = df_progress['sleep_quality'].iloc[-1]
+        
+        # Pobierz dzisiejszy trening
+        today = datetime.now().strftime("%Y-%m-%d")
+        today_progress = df_progress[df_progress['date'].dt.strftime('%Y-%m-%d') == today]
+        if not today_progress.empty:
+            training_log = today_progress['training_log'].iloc[0]
+
+    # Oblicz inteligentny cel na dziś (uwzględniając trening)
+    smart_goal = engine.calculate_smart_goal(
+        weight=current_weight,
+        height=current_user["height"],
+        age=current_user["age"],
+        gender=current_user["gender"],
+        activity_level=current_user["activity_level"],
+        goal=current_user["goal"],
+        training_log=training_log
+    )
     
     print(f"DEBUG: Insights for {current_user['email']}. Entries: {len(df_progress)}")
     
@@ -312,7 +337,8 @@ async def get_ml_insights(current_user: dict = Depends(get_current_user)):
         "trend": engine.predict_weight_trend(), 
         "plateau": engine.predict_plateau_prophet(), 
         "training": engine.analyze_training_insights(), 
-        "recommendation": engine.recommend_daily_activity(last_sleep=df_progress['sleep_quality'].iloc[-1] if not df_progress.empty else None)
+        "recommendation": engine.recommend_daily_activity(last_sleep=last_sleep),
+        "smart_goal": smart_goal
     }
 
 @app.post("/upload-photo/")
