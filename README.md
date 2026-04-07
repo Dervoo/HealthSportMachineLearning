@@ -2,6 +2,74 @@
 
 Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymalizacji procesów przy użyciu zaawansowanych modeli matematycznych i ML.
 
+## ⚡ Szybki Start (Windows)
+
+Jeśli chcesz uruchomić cały system (Backend + Frontend) jednym kliknięciem:
+
+1.  Otwórz główny folder projektu.
+2.  Uruchom system:
+    *   **Metoda 1 (Klikana)**: Kliknij dwukrotnie plik **`start_health_ml.bat`**.
+    *   **Metoda 2 (Terminal)**: Wpisz w PowerShell/CMD:
+        ```powershell
+        py run_project.py
+        ```
+3.  Skrypt automatycznie:
+    *   Sprawdzi i doinstaluje brakujące biblioteki Python.
+    *   Uruchomi **Backend API** (port 8000) z funkcją *auto-reload* (zmiany w kodzie wchodzą od razu).
+    *   Uruchomi **Web Dashboard** (port 8501).
+    *   **Automatycznie wykryje urządzenia Flutter**: Jeśli masz włączony emulator Androida, skrypt zapyta, czy go uruchomić. Jeśli nie znajdzie emulatora, zaproponuje wersję Windows Desktop.
+
+---
+
+## 📱 Mobile App (Flutter)
+Aplikacja mobilna jest teraz w pełni zintegrowana z API i Firebase.
+*   **Wydawanie wersji**: Zobacz [instrukcję MOBILE_RELEASE.md](MOBILE_RELEASE.md), aby dowiedzieć się, jak zainstalować aplikację na telefonie.
+*   **Logowanie**: Używa bezpiecznego hashowania SHA256 + BCrypt.
+*   **Woda**: Interaktywny suwak z możliwością dodawania i odejmowania (korekta błędów).
+*   **Edamam API**: Wyszukiwanie produktów działa bezpośrednio z poziomu aplikacji.
+*   **Tryb offline**: Najważniejsze dane są utrwalane w lokalnej bazie SQLite (`health_vault.db`).
+
+---
+
+## 📱 System Architecture
+
+Projekt ewoluował w ekosystem **Web + Mobile + API**:
+
+1.  **Web Dashboard (Streamlit)**: Zaawansowane centrum dowodzenia z pełną analityką ML i optymalizacją diety (`dashboard.py`).
+2.  **Backend API (FastAPI)**: Produkcyjne API obsługujące autoryzację, synchronizację danych i logikę ML dla aplikacji mobilnej (`backend/main.py`).
+3.  **Mobile App (Flutter)**: Nowoczesna aplikacja na systemy iOS/Android z logowaniem i szybkim podglądem postępów (`frontend_mobile/`).
+
+---
+
+## 🚀 Uruchomienie
+
+### 1. Web Dashboard (Analityka ML)
+Wymagane biblioteki: `streamlit`, `pandas`, `scipy`, `scikit-learn`, `prophet`.
+```powershell
+# Rekomendowana metoda na Windows
+py -m pip install -r requirements.txt
+py -m streamlit run dashboard.py
+```
+
+### 2. Backend API (Dla Mobile)
+Umożliwia synchronizację danych i logowanie użytkowników.
+```powershell
+# Uruchomienie serwera na porcie 8000
+py backend/main.py
+```
+
+### 3. Aplikacja Mobilna (Flutter)
+Wymaga zainstalowanego SDK Flutter.
+```powershell
+cd frontend_mobile
+flutter pub get
+# Upewnij się, że Backend API działa przed uruchomieniem aplikacji
+flutter run
+```
+abc@gmail.com
+123
+---
+
 ## 🌟 Funkcje
 *   **AI SMART GOAL**: Automatyczne wyliczanie zapotrzebowania kcal i białka (Mifflin-St Jeor).
 *   **Diet Optimizer (LP)**: Precyzyjne dobieranie posiłków przy użyciu programowania liniowego (`scipy.optimize`).
@@ -16,7 +84,13 @@ Dashboard Streamlit do monitorowania postępów sportowych, diety oraz optymaliz
 System wykorzystuje wzór **Mifflin-St Jeor** oraz współczynnik **PAL**.
 *   **Nowość ML:** System automatycznie wylicza cel nawodnienia: $\text{waga} \times 0.033 + \text{bonus aktywności}$.
 
-### 2. Optymalizacja Diety (Linear Programming)
+### 2. Model Autoryzacji (BCrypt + SHA256 Hybrid)
+W celu obejścia limitu 72 znaków w algorytmie BCrypt oraz zapewnienia maksymalnego bezpieczeństwa, system stosuje hybrydowe hashowanie:
+1.  **SHA256**: Hasło wejściowe jest najpierw procesowane przez funkcję skrótu SHA256.
+2.  **BCrypt**: Wynik SHA256 jest następnie hashowany przy użyciu BCrypt z dynamicznym soleniem.
+*   **Zaleta**: Pozwala na używanie haseł o dowolnej długości bez utraty entropii i zapewnia odporność na ataki typu rainbow tables.
+
+### 3. Optymalizacja Diety (Linear Programming)
 Wykorzystuje solver `highs` z biblioteki `scipy.optimize.linprog` do minimalizacji nadmiaru kcal przy zachowaniu minimum białkowego.
 
 ### 3. Prognozowanie Trendu i Plateau (Facebook Prophet)
@@ -42,6 +116,15 @@ Jak wybierać trudność treningu?
 
 ---
 
+## 🛠️ Rozwiązywanie problemów (Troubleshooting)
+
+### Problem z logowaniem (Błąd logowania / Bcrypt)
+Jeśli napotkasz błędy logowania mimo poprawnych danych, może to wynikać z konfliktu biblioteki `passlib` z nowszymi wersjami Pythona (3.12+).
+*   **Rozwiązanie:** Backend został zaktualizowany, aby używać bezpośrednio biblioteki `bcrypt`.
+*   **Ręczna naprawa bazy:** Jeśli hasła w bazie są uszkodzone, użyj skryptu `fix_db.py`, aby zresetować hasło dla `admin@test.pl`.
+
+---
+
 ## 🛠️ Poprawki User-Centric (Human-Driven Improvements)
 Dzisiejsze kluczowe zmiany wprowadzone na prośbę użytkownika:
 
@@ -57,11 +140,3 @@ Dzisiejsze kluczowe zmiany wprowadzone na prośbę użytkownika:
 *   <u>**Retro-Logging**</u>: Możliwość wyboru daty wpisu (dzisiaj/wczoraj/dowolna data), co pozwala na uzupełnianie danych z opóźnieniem.
 *   <u>**Advanced Hydration**</u>: Dodanie logowania ziół (liczone jako 90% wody) oraz wody z posiłków (zupy, koktajle).
 *   <u>**UI Visibility Fix**</u>: Całkowita poprawka stylów CSS – białe czcionki na ciemnych kafelkach dla maksymalnej czytelności.
-
-## 🚀 Uruchomienie
-Wymagane biblioteki: `streamlit`, `pandas`, `scipy`, `scikit-learn`, `prophet`.
-
-```bash
-py -m pip install streamlit pandas scipy scikit-learn prophet
-py -m streamlit run dashboard.py
-```

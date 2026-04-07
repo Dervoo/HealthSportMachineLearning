@@ -109,14 +109,51 @@ class MLEngine:
         if last_sleep >= 4: return {"type": "HEAVY", "msg": "Forma peak! Bij rekordy.", "color": "success"}
         return {"type": "REGULAR", "msg": "Wykonaj plan.", "color": "primary"}
 
-    def calculate_smart_goal(self, weight, height, age, gender, activity_level, goal):
+    def calculate_smart_goal(self, weight, height, age, gender, activity_level, goal, training_log=None):
         if gender.lower() == 'mężczyzna': bmr = 10 * weight + 6.25 * height - 5 * age + 5
         else: bmr = 10 * weight + 6.25 * height - 5 * age - 161
         tdee = bmr * activity_level
+        
+        # Bazowe cele
         if goal == 'masa': target_kcal, target_p = tdee + 300, weight * 2.2
         elif goal == 'redukcja': target_kcal, target_p = tdee - 500, weight * 2.5
         else: target_kcal, target_p = tdee, weight * 2.0
-        return {"tdee": round(tdee), "target_kcal": round(target_kcal), "target_p": round(target_p), "water": self.calculate_water_requirement(weight, activity_level)}
+        
+        # Bonus za trening (DYNAMICZNY)
+        if training_log and training_log != "Rest Day":
+            # 1. Spalone kcal z biegania: "Bieganie (300 kcal)"
+            import re
+            run_matches = re.findall(r"Bieganie \((\d+) kcal\)", training_log)
+            for kcal_burn in run_matches:
+                target_kcal += int(kcal_burn)
+            
+            # 2. Bonus za trening siłowy (Objętość)
+            # Przyjmijmy ok. 0.1 kcal na każdy 1kg objętości (tonażu) jako estymacja kosztu
+            # Oraz 0.2g białka ekstra na 1000kg objętości
+            volumes = self.parse_volume_from_string(training_log)
+            target_kcal += volumes * 0.1
+            target_p += (volumes / 1000.0) * 0.5 # mały bonus białkowy przy dużym tonażu
+
+        return {
+            "tdee": round(tdee), 
+            "target_kcal": round(target_kcal), 
+            "target_p": round(target_p), 
+            "water": self.calculate_water_requirement(weight, activity_level)
+        }
+
+    def parse_volume_from_string(self, t_str):
+        """Helper do parsowania objętości z pojedynczego stringa."""
+        if not t_str or "Rest Day" in t_str: return 0
+        import re
+        day_vol = 0
+        matches = re.findall(r"\((\d+)x([\d\.]+)kg x ([0-9,]+)\)", t_str)
+        for sets, weight, reps_str in matches:
+            try:
+                w = float(weight)
+                total_reps = sum([int(r) for r in reps_str.split(",") if r.isdigit()])
+                day_vol += w * total_reps
+            except: pass
+        return day_vol
 
     def parse_volume(self):
         """Przetwarza tekstowe logi treningowe na liczbowy tonaż (Objętość)."""

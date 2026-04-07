@@ -66,6 +66,41 @@ class DBManager:
                 pass
             conn.commit()
 
+            # Tabela posiłków (pojedyncze wpisy)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS meal_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    date DATE,
+                    name TEXT,
+                    kcal REAL,
+                    protein REAL,
+                    carbs REAL,
+                    fats REAL,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """)
+            conn.commit()
+
+    def add_meal_entry(self, user_id, date, name, kcal, p, c, f):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO meal_entries (user_id, date, name, kcal, protein, carbs, fats)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, date, name, kcal, p, c, f))
+            conn.commit()
+            return cursor.lastrowid
+
+    def delete_meal_entry(self, entry_id, user_id):
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM meal_entries WHERE id = ? AND user_id = ?", (entry_id, user_id))
+            conn.commit()
+
+    def get_daily_meals(self, user_id, date):
+        with self._get_connection() as conn:
+            return pd.read_sql_query("SELECT * FROM meal_entries WHERE user_id = ? AND date = ?", conn, params=(user_id, date))
+
     def add_user(self, name, age, height, gender, activity, goal, kcal, protein, water, email=None, password=None):
         try:
             with self._get_connection() as conn:
@@ -118,6 +153,17 @@ class DBManager:
     def get_user_progress(self, user_id):
         with self._get_connection() as conn:
             return pd.read_sql_query("SELECT * FROM progress WHERE user_id = ? ORDER BY date ASC", conn, params=(user_id,))
+
+    def update_user_goals(self, user_id, kcal, protein, water):
+        """Aktualizuje cele użytkownika w bazie."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE users SET 
+                    target_kcal = ?, target_protein = ?, water_goal = ?
+                WHERE id = ?
+            """, (kcal, protein, water, user_id))
+            conn.commit()
 
     def get_global_data(self):
         """Pobiera dane wszystkich użytkowników do 'mielenia'."""
