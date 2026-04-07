@@ -10,19 +10,22 @@ Ten dokument opisuje, jak w 2 minuty wysłać nową wersję aplikacji Health-ML 
 
 ## 🚀 Szybka Aktualizacja (Po zmianach w kodzie)
 
-Uruchom te dwie komendy w folderze `frontend_mobile`:
+Jeśli chcesz mieć pewność, że powiadomienie e-mail dotrze do testerów, użyj pełnej procedury resetu:
 
 1.  **Zbuduj aplikację:**
     ```powershell
     flutter build apk --release
     ```
 
-2.  **Wyślij do Firebase:**
+2.  **Wymuś odświeżenie testera i wyślij:**
     ```powershell
-    firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk --app 1:450035263910:android:eb5cf1a8debbc929a60767
+    cd frontend_mobile
+    firebase appdistribution:testers:remove contact.dervoo@gmail.com --project health-ml-app
+    firebase appdistribution:testers:add contact.dervoo@gmail.com --project health-ml-app
+    firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk --app 1:450035263910:android:eb5cf1a8debbc929a60767 --testers contact.dervoo@gmail.com --release-notes "OPIS ZMIAN"
     ```
 
-*Wskazówka: Wszyscy testerzy (w tym Ty) dostaną powiadomienie o nowej wersji automatycznie!*
+*Wskazówka: Usunięcie i ponowne dodanie testera przed komendą distribute gwarantuje wysłanie nowego powiadomienia e-mail.*
 
 ---
 
